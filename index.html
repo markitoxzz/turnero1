@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Turnos Clínico (con Panel de Admin)</title>
+    <title>Sistema de Turnos Clínico (con Base de Datos Firebase)</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Tone.js para sonidos -->
@@ -50,7 +50,6 @@
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
         }
-        /* Estilos para el toggle de admin */
         .toggle-checkbox:checked { right: 0; border-color: #68D391; }
         .toggle-checkbox:checked + .toggle-label { background-color: #68D391; }
     </style>
@@ -256,9 +255,45 @@
         </div>
     </div>
 
-    <script>
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCHzpmvzBc9hAfLjTIAGQIXK1bJoVYPdTE",
+            authDomain: "turnero-vd.firebaseapp.com",
+            projectId: "turnero-vd",
+            storageBucket: "turnero-vd.firebasestorage.app",
+            messagingSenderId: "889101183719",
+            appId: "1:889101183719:web:203cebd610c797e5045042"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const appStateRef = doc(db, "turnero", "estado");
+
         document.addEventListener('DOMContentLoaded', () => {
-            // --- LÓGICA DE ACCESO ---
+            // --- ESTADO GLOBAL DE LA APLICACIÓN ---
+            let appState = {
+                profesionales: [],
+                proximoIdProfesional: 1,
+                colaParaRegistro: [],
+                llamadasPublicas: [],
+                ultimoProfesionalSeleccionado: null,
+                historialRecepcion: [],
+                registroDiario: [],
+                config: {
+                    userPassword: '951',
+                    adminPassword: '9327',
+                    sistemaVigente: true,
+                    fechaVigencia: ''
+                }
+            };
+            
+            // --- REFERENCIAS AL DOM (se mantienen igual) ---
             const loginScreen = document.getElementById('login-screen');
             const appContainer = document.getElementById('app-container');
             const adminPanel = document.getElementById('admin-panel');
@@ -266,143 +301,6 @@
             const loginButton = document.getElementById('login-button');
             const loginError = document.getElementById('login-error');
             const systemStatusMessage = document.getElementById('system-status-message');
-            
-            function getPasswords() {
-                const userPass = localStorage.getItem('userPassword') || '951';
-                const adminPass = localStorage.getItem('adminPassword') || '9327';
-                return { userPass, adminPass };
-            }
-
-            function checkSystemValidity() {
-                const vigente = localStorage.getItem('sistemaVigente') !== 'false';
-                const fechaVigenciaStr = localStorage.getItem('fechaVigencia');
-
-                if (!vigente) {
-                    return { isValid: false, message: 'El sistema no se encuentra vigente. Contacte al administrador.' };
-                }
-
-                if (fechaVigenciaStr) {
-                    const hoy = new Date();
-                    hoy.setHours(0, 0, 0, 0);
-                    const parts = fechaVigenciaStr.split('-');
-                    const fechaVigencia = new Date(parts[0], parts[1] - 1, parts[2]);
-
-                    if (hoy > fechaVigencia) {
-                        return { isValid: false, message: 'La licencia del sistema ha expirado. Contacte al administrador.' };
-                    }
-                }
-                return { isValid: true, message: '' };
-            }
-
-            loginButton.addEventListener('click', () => {
-                const pass = passwordInput.value;
-                const { userPass, adminPass } = getPasswords();
-                loginError.textContent = '';
-                systemStatusMessage.textContent = '';
-
-                if (pass === adminPass) {
-                    loginScreen.style.display = 'none';
-                    adminPanel.classList.remove('hidden');
-                    adminPanel.classList.add('flex');
-                    loadAdminSettings();
-                } else if (pass === userPass) {
-                    const validity = checkSystemValidity();
-                    if (validity.isValid) {
-                        loginScreen.style.display = 'none';
-                        appContainer.classList.remove('hidden');
-                        appContainer.classList.add('flex');
-                        updateLicenseWarning();
-                    } else {
-                        systemStatusMessage.textContent = validity.message;
-                        showContactModal();
-                    }
-                } else {
-                    loginError.textContent = 'Clave incorrecta.';
-                    passwordInput.value = '';
-                    passwordInput.classList.add('border-2', 'border-red-500');
-                    setTimeout(() => { 
-                        loginError.textContent = ''; 
-                        passwordInput.classList.remove('border-2', 'border-red-500');
-                    }, 2000);
-                }
-            });
-            passwordInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') loginButton.click();
-            });
-
-            // --- LÓGICA DEL PANEL DE ADMIN ---
-            const sistemaVigenteToggle = document.getElementById('sistema-vigente-toggle');
-            const fechaVigenciaInput = document.getElementById('fecha-vigencia-input');
-            const userPasswordInput = document.getElementById('user-password-input');
-            const adminPasswordInput = document.getElementById('admin-password-input');
-            const btnGuardarAdmin = document.getElementById('btn-guardar-admin');
-            const btnAdminLogout = document.getElementById('btn-admin-logout');
-            const estadoVigenciaTexto = document.getElementById('estado-vigencia-texto');
-
-            function loadAdminSettings() {
-                const vigente = localStorage.getItem('sistemaVigente') !== 'false'; // Default a true
-                const fechaVigencia = localStorage.getItem('fechaVigencia') || '';
-                const { userPass, adminPass } = getPasswords();
-                
-                sistemaVigenteToggle.checked = vigente;
-                fechaVigenciaInput.value = fechaVigencia;
-                userPasswordInput.value = userPass;
-                adminPasswordInput.value = adminPass;
-                updateEstadoVigenciaTexto(vigente);
-            }
-
-            function updateEstadoVigenciaTexto(isVigente) {
-                if(isVigente) {
-                    estadoVigenciaTexto.textContent = "Vigente";
-                    estadoVigenciaTexto.classList.remove('text-red-400');
-                    estadoVigenciaTexto.classList.add('text-green-400');
-                } else {
-                    estadoVigenciaTexto.textContent = "No Vigente";
-                    estadoVigenciaTexto.classList.add('text-red-400');
-                    estadoVigenciaTexto.classList.remove('text-green-400');
-                }
-            }
-            
-            sistemaVigenteToggle.addEventListener('change', (e) => updateEstadoVigenciaTexto(e.target.checked));
-
-            btnGuardarAdmin.addEventListener('click', () => {
-                const newUserPass = userPasswordInput.value.trim();
-                const newAdminPass = adminPasswordInput.value.trim();
-
-                if (!newUserPass || !newAdminPass) {
-                    showMessage('Las claves no pueden estar vacías.', true);
-                    return;
-                }
-
-                localStorage.setItem('sistemaVigente', sistemaVigenteToggle.checked);
-                localStorage.setItem('fechaVigencia', fechaVigenciaInput.value);
-                localStorage.setItem('userPassword', newUserPass);
-                localStorage.setItem('adminPassword', newAdminPass);
-                showMessage('Configuración guardada correctamente.');
-            });
-            
-            adminPanel.addEventListener('click', (e) => {
-                const toggleButton = e.target.closest('[data-toggle-password]');
-                if (toggleButton) {
-                    const targetInputId = toggleButton.dataset.togglePassword;
-                    const passwordInput = document.getElementById(targetInputId);
-                    if (passwordInput) {
-                        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-                        passwordInput.setAttribute('type', type);
-                        const eyeIcon = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>`;
-                        const eyeSlashIcon = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 1.274-4.057 5.064-7 9.542-7 .847 0 1.67.127 2.455.364m0 0a10.052 10.052 0 015.682 6.636M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l22 22"></path></svg>`;
-                        toggleButton.innerHTML = type === 'password' ? eyeIcon : eyeSlashIcon;
-                    }
-                }
-            });
-
-            // --- ESTADO DE LA APLICACIÓN ---
-            let profesionales, proximoIdProfesional, colaParaRegistro, llamadasPublicas, ultimoProfesionalSeleccionado, historialRecepcion, registroDiario;
-            let pantallaInterval;
-            const MAX_LLAMADAS_EN_PANTALLA = 8;
-            const MAX_HISTORIAL_RECEPCION = 20;
-
-            // --- REFERENCIAS AL DOM ---
             const tabs = document.querySelectorAll('.tab-button');
             const btnToggleDarkMode = document.getElementById('btn-toggle-dark-mode');
             const lightIcon = document.getElementById('theme-toggle-light-icon');
@@ -439,7 +337,153 @@
             const licenseWarningDiv = document.getElementById('license-warning');
             const contactModal = document.getElementById('contact-modal');
             const contactModalClose = document.getElementById('contact-modal-close');
+            const sistemaVigenteToggle = document.getElementById('sistema-vigente-toggle');
+            const fechaVigenciaInput = document.getElementById('fecha-vigencia-input');
+            const userPasswordInput = document.getElementById('user-password-input');
+            const adminPasswordInput = document.getElementById('admin-password-input');
+            const btnGuardarAdmin = document.getElementById('btn-guardar-admin');
+            const btnAdminLogout = document.getElementById('btn-admin-logout');
+            const estadoVigenciaTexto = document.getElementById('estado-vigencia-texto');
             let onSaveCallback = null;
+            let pantallaInterval;
+            const MAX_LLAMADAS_EN_PANTALLA = 8;
+            const MAX_HISTORIAL_RECEPCION = 20;
+
+            // --- GESTIÓN DE DATOS CON FIREBASE ---
+            async function saveDataToFirebase() {
+                try {
+                    await setDoc(appStateRef, appState);
+                } catch (e) {
+                    console.error("Error writing document: ", e);
+                    showMessage("Error al guardar los datos.", true);
+                }
+            }
+
+            onSnapshot(appStateRef, (doc) => {
+                if (doc.exists()) {
+                    const oldLlamadasTimestamp = appState.llamadasPublicas[0]?.timestamp || 0;
+                    appState = { ...appState, ...doc.data() }; // Merge, manteniendo defaults si algo falta
+                    const newLlamadasTimestamp = appState.llamadasPublicas[0]?.timestamp || 0;
+                    
+                    if (document.body.contains(appContainer) && !appContainer.classList.contains('hidden')) {
+                         renderizarTodo(); // Solo renderiza si la app principal está visible
+                    }
+                    if(newLlamadasTimestamp > oldLlamadasTimestamp) {
+                        playNotificationSound('profesional');
+                    }
+                } else {
+                    // El documento no existe, lo creamos con el estado inicial
+                    console.log("No such document! Creating initial state.");
+                    saveDataToFirebase();
+                }
+            });
+
+            // --- LÓGICA DE ACCESO ---
+            function checkSystemValidity() {
+                const config = appState.config;
+                if (!config.sistemaVigente) {
+                    return { isValid: false, message: 'El sistema no se encuentra vigente. Contacte al administrador.' };
+                }
+                if (config.fechaVigencia) {
+                    const hoy = new Date();
+                    hoy.setHours(0, 0, 0, 0);
+                    const parts = config.fechaVigencia.split('-');
+                    const fechaVigencia = new Date(parts[0], parts[1] - 1, parts[2]);
+                    if (hoy > fechaVigencia) {
+                        return { isValid: false, message: 'La licencia del sistema ha expirado. Contacte al administrador.' };
+                    }
+                }
+                return { isValid: true, message: '' };
+            }
+
+            loginButton.addEventListener('click', () => {
+                const pass = passwordInput.value;
+                const { userPassword, adminPassword } = appState.config;
+                loginError.textContent = '';
+                systemStatusMessage.textContent = '';
+
+                if (pass === adminPassword) {
+                    loginScreen.style.display = 'none';
+                    adminPanel.classList.remove('hidden');
+                    adminPanel.classList.add('flex');
+                    loadAdminSettings();
+                } else if (pass === userPassword) {
+                    const validity = checkSystemValidity();
+                    if (validity.isValid) {
+                        loginScreen.style.display = 'none';
+                        appContainer.classList.remove('hidden');
+                        appContainer.classList.add('flex');
+                        updateLicenseWarning();
+                        renderizarTodo();
+                    } else {
+                        systemStatusMessage.textContent = validity.message;
+                        showContactModal();
+                    }
+                } else {
+                    loginError.textContent = 'Clave incorrecta.';
+                    passwordInput.value = '';
+                    passwordInput.classList.add('border-2', 'border-red-500');
+                    setTimeout(() => { 
+                        loginError.textContent = ''; 
+                        passwordInput.classList.remove('border-2', 'border-red-500');
+                    }, 2000);
+                }
+            });
+            passwordInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') loginButton.click(); });
+
+            // --- LÓGICA DEL PANEL DE ADMIN ---
+            function loadAdminSettings() {
+                const { sistemaVigente, fechaVigencia, userPassword, adminPassword } = appState.config;
+                sistemaVigenteToggle.checked = sistemaVigente;
+                fechaVigenciaInput.value = fechaVigencia;
+                userPasswordInput.value = userPassword;
+                adminPasswordInput.value = adminPassword;
+                updateEstadoVigenciaTexto(sistemaVigente);
+            }
+
+            function updateEstadoVigenciaTexto(isVigente) {
+                if(isVigente) {
+                    estadoVigenciaTexto.textContent = "Vigente";
+                    estadoVigenciaTexto.classList.remove('text-red-400');
+                    estadoVigenciaTexto.classList.add('text-green-400');
+                } else {
+                    estadoVigenciaTexto.textContent = "No Vigente";
+                    estadoVigenciaTexto.classList.add('text-red-400');
+                    estadoVigenciaTexto.classList.remove('text-green-400');
+                }
+            }
+            
+            sistemaVigenteToggle.addEventListener('change', (e) => updateEstadoVigenciaTexto(e.target.checked));
+
+            btnGuardarAdmin.addEventListener('click', () => {
+                const newUserPass = userPasswordInput.value.trim();
+                const newAdminPass = adminPasswordInput.value.trim();
+                if (!newUserPass || !newAdminPass) {
+                    showMessage('Las claves no pueden estar vacías.', true);
+                    return;
+                }
+                appState.config.sistemaVigente = sistemaVigenteToggle.checked;
+                appState.config.fechaVigencia = fechaVigenciaInput.value;
+                appState.config.userPassword = newUserPass;
+                appState.config.adminPassword = newAdminPass;
+                saveDataToFirebase();
+                showMessage('Configuración guardada correctamente.');
+            });
+            
+            adminPanel.addEventListener('click', (e) => {
+                const toggleButton = e.target.closest('[data-toggle-password]');
+                if (toggleButton) {
+                    const targetInputId = toggleButton.dataset.togglePassword;
+                    const passwordInput = document.getElementById(targetInputId);
+                    if (passwordInput) {
+                        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                        passwordInput.setAttribute('type', type);
+                        const eyeIcon = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>`;
+                        const eyeSlashIcon = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 1.274-4.057 5.064-7 9.542-7 .847 0 1.67.127 2.455.364m0 0a10.052 10.052 0 015.682 6.636M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l22 22"></path></svg>`;
+                        toggleButton.innerHTML = type === 'password' ? eyeIcon : eyeSlashIcon;
+                    }
+                }
+            });
             
             // --- FUNCIÓN DE NOTIFICACIÓN ---
             function showMessage(text, isError = false) {
@@ -466,20 +510,15 @@
             licenseWarningDiv.addEventListener('click', showContactModal);
 
             function updateLicenseWarning() {
-                const vigente = localStorage.getItem('sistemaVigente') !== 'false';
-                const fechaVigenciaStr = localStorage.getItem('fechaVigencia');
-                
+                const { sistemaVigente, fechaVigencia } = appState.config;
                 licenseWarningDiv.classList.add('hidden'); 
-
-                if (!vigente || !fechaVigenciaStr) return;
+                if (!sistemaVigente || !fechaVigencia) return;
 
                 const hoy = new Date();
                 hoy.setHours(0, 0, 0, 0);
-                
-                const parts = fechaVigenciaStr.split('-');
-                const fechaVigencia = new Date(parts[0], parts[1] - 1, parts[2]);
-
-                const diffTime = fechaVigencia - hoy;
+                const parts = fechaVigencia.split('-');
+                const fechaVigenciaDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                const diffTime = fechaVigenciaDate - hoy;
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
                 if (diffDays >= 0 && diffDays <= 10) {
@@ -524,14 +563,12 @@
                     if (elem.requestFullscreen) {
                         elem.requestFullscreen().catch(err => {
                             showMessage('El modo de pantalla completa no está permitido en este entorno.', true);
-                            console.error(`Error al intentar activar el modo de pantalla completa: ${err.message} (${err.name})`);
                         });
                     }
                 } else {
                     if (document.exitFullscreen) {
                         document.exitFullscreen().catch(err => {
                              showMessage('Error al salir de pantalla completa.', true);
-                             console.error(`Error al intentar salir del modo de pantalla completa: ${err.message} (${err.name})`);
                         });
                     }
                 }
@@ -543,14 +580,12 @@
                     if (elem.requestFullscreen) {
                         elem.requestFullscreen().catch(err => {
                             showMessage('El modo de pantalla completa no está permitido en este entorno.', true);
-                            console.error(`Error al intentar activar el modo de pantalla completa para la vista pública: ${err.message} (${err.name})`);
                         });
                     }
                 } else {
                     if (document.exitFullscreen) {
                         document.exitFullscreen().catch(err => {
                             showMessage('Error al salir de pantalla completa.', true);
-                             console.error(`Error al intentar salir del modo de pantalla completa: ${err.message} (${err.name})`);
                         });
                     }
                 }
@@ -590,35 +625,6 @@
                 }
             }
 
-            // --- SINCRONIZACIÓN CON LOCALSTORAGE ---
-            function loadData() {
-                profesionales = JSON.parse(localStorage.getItem('profesionales')) || [];
-                proximoIdProfesional = parseInt(localStorage.getItem('proximoIdProfesional')) || 1;
-                colaParaRegistro = JSON.parse(localStorage.getItem('colaParaRegistro')) || [];
-                llamadasPublicas = JSON.parse(localStorage.getItem('llamadasPublicas')) || [];
-                ultimoProfesionalSeleccionado = localStorage.getItem('ultimoProfesionalSeleccionado') || null;
-                historialRecepcion = JSON.parse(localStorage.getItem('historialRecepcion')) || [];
-                registroDiario = JSON.parse(localStorage.getItem('registroDiario')) || [];
-            }
-
-            function saveData() {
-                localStorage.setItem('profesionales', JSON.stringify(profesionales));
-                localStorage.setItem('proximoIdProfesional', proximoIdProfesional);
-                localStorage.setItem('colaParaRegistro', JSON.stringify(colaParaRegistro));
-                localStorage.setItem('llamadasPublicas', JSON.stringify(llamadasPublicas));
-                localStorage.setItem('ultimoProfesionalSeleccionado', ultimoProfesionalSeleccionado);
-                localStorage.setItem('historialRecepcion', JSON.stringify(historialRecepcion));
-                localStorage.setItem('registroDiario', JSON.stringify(registroDiario));
-            }
-            
-            function agregarLlamadaPublica(turno, lugar, ticket) {
-                llamadasPublicas = llamadasPublicas.filter(l => l.ticket !== ticket);
-                const nuevaLlamada = { turno, lugar, timestamp: new Date().getTime(), ticket };
-                llamadasPublicas.unshift(nuevaLlamada);
-                if (llamadasPublicas.length > MAX_LLAMADAS_EN_PANTALLA) llamadasPublicas.pop();
-                saveData();
-            }
-
             // --- LÓGICA DEL MODAL DE EDICIÓN ---
             function openModal(title, content, onSave) {
                 modalTitle.textContent = title;
@@ -635,9 +641,7 @@
             }
 
             modalCancel.addEventListener('click', closeModal);
-            modalSave.addEventListener('click', () => {
-                if (onSaveCallback) onSaveCallback();
-            });
+            modalSave.addEventListener('click', () => { if (onSaveCallback) onSaveCallback(); });
 
             // --- RENDERIZADO Y ACTUALIZACIONES DE UI ---
             function renderizarTodo() {
@@ -647,15 +651,15 @@
                 renderizarVistaProfesional();
                 renderizarRegistrosDiarios();
                 renderizarPantallaPublica();
-                numeroLlamadoSpan.textContent = colaParaRegistro.length > 0 ? colaParaRegistro[0] : '-';
+                numeroLlamadoSpan.textContent = appState.colaParaRegistro.length > 0 ? appState.colaParaRegistro[0] : '-';
             }
             
             function renderizarVistaRecepcion() {
                 listasEsperaRecepcionDiv.innerHTML = '';
-                if (profesionales.length === 0) {
+                if (appState.profesionales.length === 0) {
                      listasEsperaRecepcionDiv.innerHTML = '<p class="text-gray-500 text-center">No hay profesionales.</p>';
                 } else {
-                    profesionales.forEach(p => {
+                    appState.profesionales.forEach(p => {
                         const div = document.createElement('div');
                         div.innerHTML = `<h4 class="font-semibold">${p.nombre} (${p.cola.length})</h4>`;
                         const ul = document.createElement('ul');
@@ -680,9 +684,9 @@
                     });
                 }
 
-                historialLlamadosRecepcionDiv.innerHTML = historialRecepcion.length === 0 
+                historialLlamadosRecepcionDiv.innerHTML = appState.historialRecepcion.length === 0 
                     ? '<p class="text-gray-500 text-center p-2">No hay llamados recientes.</p>' 
-                    : historialRecepcion.map(ticket => `
+                    : appState.historialRecepcion.map(ticket => `
                         <div class="p-2 bg-gray-100 dark:bg-gray-700 rounded-md flex justify-between items-center">
                             <span>Ticket #${ticket}</span>
                             <button data-ticket="${ticket}" class="btn-rellamar-recepcion text-sanitary-600 hover:text-sanitary-800 p-1 rounded-full">
@@ -692,8 +696,8 @@
             }
 
             function renderizarListaProfesionales() {
-                listaProfesionalesDiv.innerHTML = profesionales.length === 0 ? '<p class="text-gray-500">No hay profesionales.</p>' : '';
-                profesionales.forEach(p => {
+                listaProfesionalesDiv.innerHTML = appState.profesionales.length === 0 ? '<p class="text-gray-500">No hay profesionales.</p>' : '';
+                appState.profesionales.forEach(p => {
                     const div = document.createElement('div');
                     div.className = 'p-3 bg-white dark:bg-gray-800 rounded-md flex justify-between items-center';
                     div.innerHTML = `
@@ -712,17 +716,17 @@
             function renderizarSelectoresProfesionales() {
                 selectorProfesionalAsignacion.innerHTML = '';
                 selectorVistaProfesional.innerHTML = '<option value="">Seleccione...</option>';
-                if (profesionales.length === 0) {
+                if (appState.profesionales.length === 0) {
                     selectorProfesionalAsignacion.innerHTML = '<option>No hay profesionales</option>';
                 } else {
-                    profesionales.forEach(p => {
+                    appState.profesionales.forEach(p => {
                         const option = `<option value="${p.id}">${p.nombre} - C${p.consultorio}</option>`;
                         selectorProfesionalAsignacion.innerHTML += option;
                         selectorVistaProfesional.innerHTML += option;
                     });
                 }
-                if (ultimoProfesionalSeleccionado) {
-                    selectorVistaProfesional.value = ultimoProfesionalSeleccionado;
+                if (appState.ultimoProfesionalSeleccionado) {
+                    selectorVistaProfesional.value = appState.ultimoProfesionalSeleccionado;
                 }
             }
             
@@ -732,7 +736,7 @@
                     vistaProfesionalDetalleDiv.innerHTML = '<p class="text-gray-500 text-center">Seleccione un profesional.</p>';
                     return;
                 }
-                const prof = profesionales.find(p => p.id === idSeleccionado);
+                const prof = appState.profesionales.find(p => p.id === idSeleccionado);
                 if (!prof) return;
 
                 let atendiendoHTML = '';
@@ -777,10 +781,10 @@
 
             function renderizarPantallaPublica() {
                 tablaLlamadasBody.innerHTML = '';
-                if (llamadasPublicas.length === 0) {
+                if (appState.llamadasPublicas.length === 0) {
                      tablaLlamadasBody.innerHTML = `<tr><td colspan="2" class="p-8 text-center text-gray-500">Esperando llamadas...</td></tr>`;
                 } else {
-                    llamadasPublicas.forEach(llamada => {
+                    appState.llamadasPublicas.forEach(llamada => {
                         const tr = document.createElement('tr');
                         tr.className = "transition-all duration-300";
                         tr.innerHTML = `<td class="p-4">${llamada.turno}</td><td class="p-4">${llamada.lugar}</td>`;
@@ -791,7 +795,7 @@
             
             function renderizarRegistrosDiarios() {
                 registrosDiariosContainer.innerHTML = '';
-                const registrosPorProfesional = registroDiario.reduce((acc, reg) => {
+                const registrosPorProfesional = appState.registroDiario.reduce((acc, reg) => {
                     if (!acc[reg.profesionalNombre]) acc[reg.profesionalNombre] = [];
                     acc[reg.profesionalNombre].push(reg);
                     return acc;
@@ -845,13 +849,9 @@
             function startPantallaInterval() {
                 if (pantallaInterval) return;
                 pantallaInterval = setInterval(() => {
-                    const oldTimestamp = llamadasPublicas.length > 0 ? llamadasPublicas[0].timestamp : 0;
-                    loadData();
-                    if (llamadasPublicas.length > 0 && llamadasPublicas[0].timestamp > oldTimestamp) {
-                        playNotificationSound('profesional');
-                    }
-                    renderizarPantallaPublica();
-                }, 2000);
+                    // La lógica de recarga ya no es necesaria, onSnapshot lo hace
+                    // solo mantenemos el intervalo por si acaso, pero podría eliminarse
+                }, 5000);
             }
 
             function stopPantallaInterval() {
@@ -865,21 +865,21 @@
                 const especialidad = inputProfesionalEspecialidad.value.trim();
                 const consultorio = inputProfesionalConsultorio.value.trim();
                 if (!nombre || !especialidad || !consultorio) { showMessage("Complete todos los campos.", true); return; }
-                profesionales.push({ id: proximoIdProfesional++, nombre, especialidad, consultorio, cola: [], atendiendo: null });
+                appState.profesionales.push({ id: appState.proximoIdProfesional++, nombre, especialidad, consultorio, cola: [], atendiendo: null });
                 inputProfesionalNombre.value = ''; inputProfesionalEspecialidad.value = ''; inputProfesionalConsultorio.value = '';
-                saveData(); renderizarTodo();
+                saveDataToFirebase();
             });
 
             listaProfesionalesDiv.addEventListener('click', (e) => {
                 if (e.target.classList.contains('btn-eliminar-profesional')) {
                     if (confirm('¿Está seguro?')) {
-                        profesionales = profesionales.filter(p => p.id !== parseInt(e.target.dataset.id));
-                        saveData(); renderizarTodo();
+                        appState.profesionales = appState.profesionales.filter(p => p.id !== parseInt(e.target.dataset.id));
+                        saveDataToFirebase();
                     }
                 }
                 if (e.target.classList.contains('btn-edit-profesional')) {
                     const profId = parseInt(e.target.dataset.id);
-                    const prof = profesionales.find(p => p.id === profId);
+                    const prof = appState.profesionales.find(p => p.id === profId);
                     const content = `<div class="space-y-2">
                             <label>Nombre: <input id="edit-prof-nombre" class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 dark:border-gray-600" value="${prof.nombre}"></label>
                             <label>Especialidad: <input id="edit-prof-esp" class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 dark:border-gray-600" value="${prof.especialidad}"></label>
@@ -889,7 +889,8 @@
                         prof.nombre = document.getElementById('edit-prof-nombre').value;
                         prof.especialidad = document.getElementById('edit-prof-esp').value;
                         prof.consultorio = document.getElementById('edit-prof-cons').value;
-                        saveData(); renderizarTodo(); closeModal();
+                        saveDataToFirebase(); 
+                        closeModal();
                     });
                 }
             });
@@ -897,21 +898,22 @@
             btnLlamarManual.addEventListener('click', () => {
                 const ticketManual = inputManualTicket.value.trim();
                 if (ticketManual) {
-                    if (!colaParaRegistro.includes(ticketManual)) {
-                        colaParaRegistro.push(ticketManual);
-                        if (!historialRecepcion.includes(ticketManual)) {
-                            historialRecepcion.unshift(ticketManual);
-                            if(historialRecepcion.length > MAX_HISTORIAL_RECEPCION) historialRecepcion.pop();
+                    if (!appState.colaParaRegistro.includes(ticketManual)) {
+                        appState.colaParaRegistro.push(ticketManual);
+                        if (!appState.historialRecepcion.includes(ticketManual)) {
+                            appState.historialRecepcion.unshift(ticketManual);
+                            if(appState.historialRecepcion.length > MAX_HISTORIAL_RECEPCION) appState.historialRecepcion.pop();
                         }
-                        agregarLlamadaPublica(`Ticket #${ticketManual}`, 'Recepción', ticketManual);
-                        saveData(); renderizarTodo(); playNotificationSound('recepcion');
+                        appState.llamadasPublicas.unshift({ turno: `Ticket #${ticketManual}`, lugar: 'Recepción', timestamp: new Date().getTime(), ticket: ticketManual });
+                        if (appState.llamadasPublicas.length > MAX_LLAMADAS_EN_PANTALLA) appState.llamadasPublicas.pop();
+                        saveDataToFirebase();
                         inputManualTicket.value = '';
                     } else { showMessage('Ese ticket ya está en la cola.', true); }
                 } else { showMessage('Número de ticket inválido.', true); }
             });
             
             btnAsignarPaciente.addEventListener('click', () => {
-                if (colaParaRegistro.length === 0) { showMessage('Debe ingresar un ticket en la cola de registro.', true); return; }
+                if (appState.colaParaRegistro.length === 0) { showMessage('Debe ingresar un ticket en la cola de registro.', true); return; }
                 const idProfesional = parseInt(selectorProfesionalAsignacion.value);
                 const nombrePaciente = inputPacienteNombre.value.trim();
                 const dni = inputPacienteDni.value.trim();
@@ -921,26 +923,24 @@
                 if (!idProfesional) { showMessage('Debe seleccionar un profesional.', true); return; }
                 if (!nombrePaciente) { showMessage('Debe ingresar el nombre del paciente.', true); return; }
 
-                const prof = profesionales.find(p => p.id === idProfesional);
-                const ticket = colaParaRegistro.shift();
+                const prof = appState.profesionales.find(p => p.id === idProfesional);
+                const ticket = appState.colaParaRegistro.shift();
                 prof.cola.push({ ticket, nombre: nombrePaciente, dni, obraSocial, observaciones });
-                
-                llamadasPublicas = llamadasPublicas.filter(l => l.ticket !== ticket);
+                appState.llamadasPublicas = appState.llamadasPublicas.filter(l => l.ticket !== ticket);
 
                 inputPacienteNombre.value = ''; inputPacienteDni.value = ''; inputPacienteObraSocial.value = ''; inputPacienteObservaciones.value = '';
-                saveData(); renderizarTodo();
+                saveDataToFirebase();
             });
 
             selectorVistaProfesional.addEventListener('change', (e) => {
-                ultimoProfesionalSeleccionado = e.target.value;
-                saveData();
-                renderizarVistaProfesional();
+                appState.ultimoProfesionalSeleccionado = e.target.value;
+                saveDataToFirebase();
             });
 
             vistaProfesionalDetalleDiv.addEventListener('click', (e) => {
                 const idSeleccionado = parseInt(selectorVistaProfesional.value);
                 if (!idSeleccionado) return;
-                const prof = profesionales.find(p => p.id === idSeleccionado);
+                const prof = appState.profesionales.find(p => p.id === idSeleccionado);
                 if (!prof) return;
 
                 if (e.target.closest('.btn-llamar-paciente')) {
@@ -954,20 +954,20 @@
                         pacienteLlamado.atendido = false;
                         prof.atendiendo = pacienteLlamado;
                         const lugar = `Consultorio ${prof.consultorio} (${prof.nombre})`;
-                        agregarLlamadaPublica(pacienteLlamado.nombre, lugar, pacienteLlamado.ticket);
-                        playNotificationSound('profesional');
+                        appState.llamadasPublicas = appState.llamadasPublicas.filter(l => l.ticket !== pacienteLlamado.ticket);
+                        appState.llamadasPublicas.unshift({ turno: pacienteLlamado.nombre, lugar, timestamp: new Date().getTime(), ticket: pacienteLlamado.ticket });
+                        if (appState.llamadasPublicas.length > MAX_LLAMADAS_EN_PANTALLA) appState.llamadasPublicas.pop();
                     } else {
                         showMessage('No hay más pacientes en espera.');
                     }
-                    saveData();
-                    renderizarTodo();
+                    saveDataToFirebase();
                 }
                 if (e.target.classList.contains('btn-marcar-atendido') || e.target.classList.contains('btn-marcar-no-atendido')) {
                     if (prof.atendiendo) {
                         const estado = e.target.classList.contains('btn-marcar-atendido') ? 'Atendido' : 'No Atendido';
                         const pacienteAtendido = prof.atendiendo;
                         
-                        registroDiario.unshift({
+                        appState.registroDiario.unshift({
                             ...pacienteAtendido,
                             profesionalNombre: prof.nombre,
                             estado: estado,
@@ -975,19 +975,20 @@
                         });
 
                         if (estado === 'Atendido') {
-                            llamadasPublicas = llamadasPublicas.filter(l => l.ticket !== pacienteAtendido.ticket);
+                            appState.llamadasPublicas = appState.llamadasPublicas.filter(l => l.ticket !== pacienteAtendido.ticket);
                         }
                         
                         prof.atendiendo = null;
-                        saveData();
-                        renderizarTodo();
+                        saveDataToFirebase();
                     }
                 }
                 if (e.target.closest('.btn-rellamar-paciente')) {
                     if (prof.atendiendo) {
                         const lugar = `Consultorio ${prof.consultorio} (${prof.nombre})`;
-                        agregarLlamadaPublica(prof.atendiendo.nombre, lugar, prof.atendiendo.ticket);
-                        playNotificationSound('profesional');
+                        appState.llamadasPublicas = appState.llamadasPublicas.filter(l => l.ticket !== prof.atendiendo.ticket);
+                        appState.llamadasPublicas.unshift({ turno: prof.atendiendo.nombre, lugar, timestamp: new Date().getTime(), ticket: prof.atendiendo.ticket });
+                        if (appState.llamadasPublicas.length > MAX_LLAMADAS_EN_PANTALLA) appState.llamadasPublicas.pop();
+                        saveDataToFirebase();
                     }
                 }
             });
@@ -996,7 +997,7 @@
                 if (e.target.classList.contains('btn-edit-paciente')) {
                     const profId = parseInt(e.target.dataset.profId);
                     const pacIndex = parseInt(e.target.dataset.pacIndex);
-                    const prof = profesionales.find(p => p.id === profId);
+                    const prof = appState.profesionales.find(p => p.id === profId);
                     const pac = prof.cola[pacIndex];
                     const content = `<div class="space-y-2">
                         <label>Nombre: <input id="edit-pac-nombre" class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 dark:border-gray-600" value="${pac.nombre}"></label>
@@ -1009,7 +1010,8 @@
                         pac.dni = document.getElementById('edit-pac-dni').value;
                         pac.obraSocial = document.getElementById('edit-pac-os').value;
                         pac.observaciones = document.getElementById('edit-pac-obs').value;
-                        saveData(); renderizarTodo(); closeModal();
+                        saveDataToFirebase(); 
+                        closeModal();
                     });
                 }
             });
@@ -1018,16 +1020,16 @@
                 const rellamarBtn = e.target.closest('.btn-rellamar-recepcion');
                 if (rellamarBtn) {
                     const ticket = rellamarBtn.dataset.ticket;
-                    agregarLlamadaPublica(`Ticket #${ticket}`, 'Recepción', ticket);
-                    playNotificationSound('recepcion');
-                    renderizarPantallaPublica();
+                    appState.llamadasPublicas.unshift({ turno: `Ticket #${ticket}`, lugar: 'Recepción', timestamp: new Date().getTime(), ticket: ticket });
+                    if (appState.llamadasPublicas.length > MAX_LLAMADAS_EN_PANTALLA) appState.llamadasPublicas.pop();
+                    saveDataToFirebase();
                 }
             });
 
             registrosDiariosContainer.addEventListener('click', (e) => {
                 if (e.target.classList.contains('btn-edit-registro')) {
                     const regIndex = parseInt(e.target.dataset.registroIndex);
-                    const registro = registroDiario[regIndex];
+                    const registro = appState.registroDiario[regIndex];
                     const content = `<div class="space-y-2">
                         <label>Nombre: <input id="edit-reg-nombre" class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 dark:border-gray-600" value="${registro.nombre}"></label>
                         <label>DNI: <input id="edit-reg-dni" class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 dark:border-gray-600" value="${registro.dni || ''}"></label>
@@ -1039,19 +1041,19 @@
                         registro.dni = document.getElementById('edit-reg-dni').value;
                         registro.obraSocial = document.getElementById('edit-reg-os').value;
                         registro.observaciones = document.getElementById('edit-reg-obs').value;
-                        saveData(); renderizarTodo(); closeModal();
+                        saveDataToFirebase(); 
+                        closeModal();
                     });
                 }
                 if (e.target.classList.contains('btn-requeue-paciente')) {
                     const regIndex = parseInt(e.target.dataset.registroIndex);
-                    const registro = registroDiario[regIndex];
-                    const prof = profesionales.find(p => p.nombre === registro.profesionalNombre);
+                    const registro = appState.registroDiario[regIndex];
+                    const prof = appState.profesionales.find(p => p.nombre === registro.profesionalNombre);
                     if (prof) {
                         const { profesionalNombre, estado, fechaHora, ...pacienteData } = registro;
                         prof.cola.push(pacienteData);
-                        registroDiario.splice(regIndex, 1);
-                        saveData();
-                        renderizarTodo();
+                        appState.registroDiario.splice(regIndex, 1);
+                        saveDataToFirebase();
                     }
                 }
             });
@@ -1059,21 +1061,15 @@
             function handleDragEnd(evt) {
                 const fromProfId = parseInt(evt.from.dataset.profesionalId);
                 const toProfId = parseInt(evt.to.dataset.profesionalId);
-                const fromProf = profesionales.find(p => p.id === fromProfId);
-                const toProf = profesionales.find(p => p.id === toProfId);
+                const fromProf = appState.profesionales.find(p => p.id === fromProfId);
+                const toProf = appState.profesionales.find(p => p.id === toProfId);
                 const [movedItem] = fromProf.cola.splice(evt.oldIndex, 1);
                 toProf.cola.splice(evt.newIndex, 0, movedItem);
-                saveData(); renderizarTodo();
+                saveDataToFirebase();
             }
 
-            window.addEventListener('storage', () => {
-                loadData(); renderizarTodo();
-            });
-
             // Inicialización
-            loadData();
             updateThemeToggle();
-            renderizarTodo();
         });
     </script>
 </body>
