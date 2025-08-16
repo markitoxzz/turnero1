@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Turnos Clínico (con Panel de Admin)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js para sonidos -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <!-- SortableJS para Drag & Drop -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        sanitary: { 50: '#f0fdfa', 100: '#ccfbf1', 200: '#99f6e4', 300: '#5eead4', 400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488', 700: '#0f766e', 800: '#115e59', 900: '#134e4a', 950: '#042f2e' },
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .tab-active { border-color: #0d9488; color: #0d9488; background-color: #f0fdfa; }
+        .dark .tab-active { border-color: #5eead4; color: #5eead4; background-color: #134e4a; }
+        .tab-content { transition: opacity 0.3s ease-in-out; }
+        #tabla-llamadas-body tr:first-child { background-color: #ccfbf1; animation: pulse-bg 2s infinite; }
+        .dark #tabla-llamadas-body tr:first-child { background-color: #134e4a; animation: pulse-bg-dark 2s infinite; }
+        #tabla-llamadas-body tr:first-child td { font-size: 1.5rem; font-weight: 700; color: #0f766e; }
+        .dark #tabla-llamadas-body tr:first-child td { color: #ccfbf1; }
+        @keyframes pulse-bg { 0% { background-color: #ccfbf1; } 50% { background-color: #f0fdfa; } 100% { background-color: #ccfbf1; } }
+        @keyframes pulse-bg-dark { 0% { background-color: #134e4a; } 50% { background-color: #0f766e; } 100% { background-color: #134e4a; } }
+        .sortable-ghost { background: #d1fae5; opacity: 0.5; }
+        .sortable-drag { opacity: 1 !important; }
+        .drag-handle { cursor: grab; }
+        input, textarea, select { color: #111827; }
+        .dark input, .dark textarea, .dark select { color: #f9fafb; background-color: #374151; border-color: #4b5563; }
+        .custom-message-box {
+            transition: opacity 0.5s ease-in-out;
+            animation: slide-in 0.5s forwards;
+        }
+        @keyframes slide-in {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        /* Estilos para el toggle de admin */
+        .toggle-checkbox:checked { right: 0; border-color: #68D391; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #68D391; }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-black text-gray-800 dark:text-gray-200">
+
+    <!-- Pantalla de Acceso -->
+    <div id="login-screen" class="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center">
+        <div class="w-full max-w-xs text-center">
+            <h1 class="text-3xl font-bold text-white mb-6">Acceso al Sistema</h1>
+            <input type="password" id="password-input" class="w-full p-3 text-center rounded-md mb-4" placeholder="Ingrese la clave">
+            <button id="login-button" class="w-full bg-sanitary-500 hover:bg-sanitary-600 text-white font-bold py-3 rounded-lg">Ingresar</button>
+            <p id="login-error" class="text-red-500 mt-4 h-4"></p>
+            <p id="system-status-message" class="text-yellow-400 mt-2 h-10 text-sm"></p>
+        </div>
+    </div>
+
+    <!-- Contenedor Principal de la App (Inicialmente oculto) -->
+    <div id="app-container" class="hidden w-full min-h-screen flex-col bg-white dark:bg-gray-800">
+        <header id="app-header" class="p-4 bg-sanitary-600 text-white flex justify-between items-center shadow-md">
+            <h1 class="text-xl sm:text-3xl font-bold">TURNERO</h1>
+            <div class="flex items-center gap-4">
+                <div id="license-warning" class="hidden text-red-200 font-bold uppercase text-xs sm:text-sm cursor-pointer animate-pulse"></div>
+                <div class="flex items-center gap-2">
+                    <button id="btn-app-fullscreen" class="p-2 rounded-full hover:bg-white/20" title="Pantalla Completa">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 0h-4m4 0l-5-5"></path></svg>
+                    </button>
+                    <button id="btn-toggle-dark-mode" class="p-2 rounded-full hover:bg-white/20" title="Modo Día/Noche">
+                        <svg id="theme-toggle-dark-icon" class="w-6 h-6 hidden" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                        <svg id="theme-toggle-light-icon" class="w-6 h-6 hidden" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm-.707 12.022l.707-.707a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414zM17 13a1 1 0 100 2h-1a1 1 0 100-2h1zm-7-12a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+                    </button>
+                    <button id="btn-logout" class="p-2 rounded-full hover:bg-white/20" title="Cerrar Sesión">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navegación Superior -->
+        <div id="app-nav" class="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+            <nav class="flex flex-wrap justify-center -mb-px" aria-label="Tabs">
+                <button data-tab="profesionales" class="tab-button text-xs sm:text-base py-3 px-3 sm:px-4 border-b-2 rounded-t-lg focus:outline-none tab-active">👨‍⚕️ Profesionales</button>
+                <button data-tab="registrar" class="tab-button text-xs sm:text-base py-3 px-3 sm:px-4 border-b-2 rounded-t-lg focus:outline-none">📝 Recepción</button>
+                <button data-tab="llamar" class="tab-button text-xs sm:text-base py-3 px-3 sm:px-4 border-b-2 rounded-t-lg focus:outline-none">🗣️ Puestos de Atención</button>
+                <button data-tab="registros" class="tab-button text-xs sm:text-base py-3 px-3 sm:px-4 border-b-2 rounded-t-lg focus:outline-none">📊 Registros Diarios</button>
+                <button data-tab="pantalla" class="tab-button text-xs sm:text-base py-3 px-3 sm:px-4 border-b-2 rounded-t-lg focus:outline-none">🖥️ Pantalla Pública</button>
+            </nav>
+        </div>
+
+        <!-- Contenido Principal -->
+        <main class="flex-grow p-4 sm:p-8 bg-gray-100 dark:bg-gray-900/50">
+            <!-- Contenido de las Pestañas -->
+            <div id="content-profesionales" class="tab-content">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                        <h2 class="text-2xl font-semibold mb-4 text-sanitary-600 dark:text-sanitary-400">Agregar Profesional</h2>
+                        <div class="space-y-4">
+                            <input type="text" id="input-profesional-nombre" placeholder="Nombre del Profesional" class="w-full p-3 border rounded-md">
+                            <input type="text" id="input-profesional-especialidad" placeholder="Especialidad" class="w-full p-3 border rounded-md">
+                            <input type="number" id="input-profesional-consultorio" placeholder="N° de Consultorio" class="w-full p-3 border rounded-md">
+                            <button id="btn-agregar-profesional" class="w-full bg-sanitary-500 hover:bg-sanitary-600 text-white font-bold py-3 rounded-lg">Agregar</button>
+                        </div>
+                    </div>
+                    <div class="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                        <h2 class="text-2xl font-semibold mb-4">Profesionales Activos</h2>
+                        <div id="lista-profesionales" class="space-y-2 max-h-60 overflow-y-auto"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="content-registrar" class="tab-content hidden">
+                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl space-y-6">
+                        <div class="text-center">
+                            <h2 class="text-2xl font-semibold mb-2">1. Ingresar Ticket del Paciente</h2>
+                            <div class="mt-4 flex gap-2">
+                                <input type="text" id="input-manual-ticket" placeholder="N° de Ticket del Talonario" class="w-full p-2 border rounded-md text-center">
+                                <button id="btn-llamar-manual" class="bg-sanitary-500 text-white px-4 rounded-md">Ingresar</button>
+                            </div>
+                            <div class="mt-4 p-4 bg-white dark:bg-gray-800 rounded-lg">
+                                <p class="text-gray-500">Atendiendo al ticket:</p>
+                                <p id="numero-llamado" class="text-5xl font-bold text-gray-900 dark:text-gray-100">-</p>
+                            </div>
+                        </div>
+                         <div class="border-t pt-6 text-center">
+                            <h3 class="font-semibold text-xl mb-4">2. Asignar a Profesional</h3>
+                            <div class="space-y-3">
+                                <input type="text" id="input-paciente-nombre" placeholder="Nombre completo del paciente" class="w-full p-3 border rounded-md">
+                                <input type="text" id="input-paciente-dni" placeholder="DNI del paciente" class="w-full p-3 border rounded-md">
+                                <input type="text" id="input-paciente-obra-social" placeholder="Obra Social" class="w-full p-3 border rounded-md">
+                                <textarea id="input-paciente-observaciones" placeholder="Observaciones..." rows="2" class="w-full p-3 border rounded-md"></textarea>
+                                <select id="selector-profesional-asignacion" class="w-full p-3 border rounded-md"></select>
+                                <button id="btn-asignar-paciente" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg">Asignar Paciente</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl flex flex-col gap-6">
+                        <div>
+                            <h3 class="text-xl font-semibold text-center mb-4">Colas de Espera por Profesional</h3>
+                            <div id="listas-espera-recepcion" class="space-y-3 max-h-64 overflow-y-auto"></div>
+                        </div>
+                        <div class="border-t pt-6">
+                             <h3 class="text-xl font-semibold text-center mb-4">Historial de Llamados (Recepción)</h3>
+                             <div id="historial-llamados-recepcion" class="p-2 space-y-2 max-h-40 overflow-y-auto bg-white dark:bg-gray-800 rounded-md"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="content-llamar" class="tab-content hidden">
+                <div class="w-full max-w-lg mx-auto p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                    <h2 class="text-2xl font-semibold text-center mb-4">Vista del Profesional</h2>
+                    <label for="selector-vista-profesional" class="block mb-2 font-medium">Seleccione su vista:</label>
+                    <select id="selector-vista-profesional" class="w-full p-3 mb-4 border rounded-md"></select>
+                    <div id="vista-profesional-detalle" class="mt-4 p-4 border rounded-lg min-h-[300px]"></div>
+                </div>
+            </div>
+            <div id="content-registros" class="tab-content hidden">
+                <h2 class="text-3xl font-bold text-center mb-6 text-sanitary-600 dark:text-sanitary-400">Registro de Atenciones Diarias</h2>
+                <div id="registros-diarios-container" class="space-y-6 max-h-[70vh] overflow-y-auto">
+                    <p class="text-center text-gray-500">No hay registros de atención para hoy.</p>
+                </div>
+            </div>
+            <div id="content-pantalla" class="tab-content hidden relative">
+                <button id="btn-fullscreen-public" class="absolute top-2 right-2 bg-gray-500/50 hover:bg-gray-600/50 text-white font-bold py-2 px-4 rounded-lg z-10">Pantalla Completa</button>
+                <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 shadow-md">
+                    <table class="w-full text-left text-gray-800 dark:text-gray-200">
+                        <thead class="bg-gray-100 dark:bg-gray-700 text-lg">
+                            <tr>
+                                <th class="p-4">Paciente / Ticket</th>
+                                <th class="p-4">Lugar de Atención</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-llamadas-body" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Panel de Administración -->
+    <div id="admin-panel" class="hidden w-full min-h-screen flex-col bg-gray-800 text-white p-8">
+        <h1 class="text-4xl font-bold mb-8 text-center text-sanitary-400">Panel de Administración</h1>
+        <div class="max-w-md mx-auto space-y-6 bg-gray-700 p-6 rounded-lg">
+            <div>
+                <label for="sistema-vigente-toggle" class="text-lg font-medium">Estado del Sistema</label>
+                <div class="relative inline-block w-14 ml-4 align-middle select-none transition duration-200 ease-in">
+                    <input type="checkbox" name="toggle" id="sistema-vigente-toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                    <label for="sistema-vigente-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                </div>
+                 <span id="estado-vigencia-texto" class="ml-3 text-gray-300"></span>
+            </div>
+            <div>
+                <label for="fecha-vigencia-input" class="block text-lg font-medium mb-2">Vigente hasta la fecha:</label>
+                <input type="date" id="fecha-vigencia-input" class="w-full p-2 rounded-md bg-gray-600 border border-gray-500 text-white">
+            </div>
+            <div class="border-t border-gray-600 my-4"></div>
+            <div>
+                <label for="user-password-input" class="block text-lg font-medium mb-2">Clave de Usuario:</label>
+                <div class="relative">
+                    <input type="password" id="user-password-input" class="w-full p-2 rounded-md bg-gray-600 border border-gray-500 text-white pr-10">
+                    <button type="button" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-white" data-toggle-password="user-password-input">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                    </button>
+                </div>
+            </div>
+            <div>
+                <label for="admin-password-input" class="block text-lg font-medium mb-2">Clave de Administrador:</label>
+                <div class="relative">
+                    <input type="password" id="admin-password-input" class="w-full p-2 rounded-md bg-gray-600 border border-gray-500 text-white pr-10">
+                    <button type="button" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-white" data-toggle-password="admin-password-input">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="flex gap-4 pt-4">
+                <button id="btn-guardar-admin" class="w-full bg-sanitary-500 hover:bg-sanitary-600 text-white font-bold py-3 rounded-lg">Guardar Cambios</button>
+                <button id="btn-admin-logout" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-lg">Cerrar Sesión</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Edición -->
+    <div id="edit-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h3 id="modal-title" class="text-2xl font-bold mb-4">Editar</h3>
+            <div id="modal-body" class="space-y-3"></div>
+            <div class="mt-6 flex justify-end gap-4">
+                <button id="modal-cancel" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded">Cancelar</button>
+                <button id="modal-save" class="bg-sanitary-500 hover:bg-sanitary-600 text-white font-bold py-2 px-4 rounded">Guardar</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de Contacto -->
+    <div id="contact-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 text-center">
+            <h3 class="text-2xl font-bold mb-4 text-gray-800 dark:text-white">Licencia Expirada o no Vigente</h3>
+            <p class="text-gray-600 dark:text-gray-300 mb-6">Por favor, contacte al administrador para renovar el servicio.</p>
+            <div class="space-y-2 text-left inline-block">
+                <p class="text-lg text-gray-700 dark:text-gray-200"><strong>TEL:</strong> +5493513786483</p>
+                <p class="text-lg text-gray-700 dark:text-gray-200"><strong>EMAIL:</strong> AB.GUTIERREZRUARTE@GMAIL.COM</p>
+            </div>
+            <button id="contact-modal-close" class="mt-8 block w-full bg-sanitary-500 hover:bg-sanitary-600 text-white font-bold py-2 px-6 rounded-lg">Cerrar</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- LÓGICA DE ACCESO ---
+            const loginScreen = document.getElementById('login-screen');
+            const appContainer = document.getElementById('app-container');
+            const adminPanel = document.getElementById('admin-panel');
+            const passwordInput = document.getElementById('password-input');
+            const loginButton = document.getElementById('login-button');
+            const loginError = document.getElementById('login-error');
+            const systemStatusMessage = document.getElementById('system-status-message');
+            
+            function getPasswords() {
+                const userPass = localStorage.getItem('userPassword') || '951';
+                const adminPass = localStorage.getItem('adminPassword') || '9327';
+                return { userPass, adminPass };
+            }
+
+            function checkSystemValidity() {
+                const vigente = localStorage.getItem('sistemaVigente') !== 'false';
+                const fechaVigenciaStr = localStorage.getItem('fechaVigencia');
+
+                if (!vigente) {
+                    return { isValid: false, message: 'El sistema no se encuentra vigente. Contacte al administrador.' };
+                }
+
+                if (fechaVigenciaStr) {
+                    const hoy = new Date();
+                    hoy.setHours(0, 0, 0, 0);
+                    const parts = fechaVigenciaStr.split('-');
+                    const fechaVigencia = new Date(parts[0], parts[1] - 1, parts[2]);
+
+                    if (hoy > fechaVigencia) {
+                        return { isValid: false, message: 'La licencia del sistema ha expirado. Contacte al administrador.' };
+                    }
+                }
+                return { isValid: true, message: '' };
+            }
+
+            loginButton.addEventListener('click', () => {
+                const pass = passwordInput.value;
+                const { userPass, adminPass } = getPasswords();
+                loginError.textContent = '';
+                systemStatusMessage.textContent = '';
+
+                if (pass === adminPass) {
+                    loginScreen.style.display = 'none';
+                    adminPanel.classList.remove('hidden');
+                    adminPanel.classList.add('flex');
+                    loadAdminSettings();
+                } else if (pass === userPass) {
+                    const validity = checkSystemValidity();
+                    if (validity.isValid) {
+                        loginScreen.style.display = 'none';
+                        appContainer.classList.remove('hidden');
+                        appContainer.classList.add('flex');
+                        updateLicenseWarning();
+                    } else {
+                        systemStatusMessage.textContent = validity.message;
+                        showContactModal();
+                    }
+                } else {
+                    loginError.textContent = 'Clave incorrecta.';
+                    passwordInput.value = '';
+                    passwordInput.classList.add('border-2', 'border-red-500');
+                    setTimeout(() => { 
+                        loginError.textContent = ''; 
+                        passwordInput.classList.remove('border-2', 'border-red-500');
+                    }, 2000);
+                }
+            });
+            passwordInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') loginButton.click();
+            });
+
+            // --- LÓGICA DEL PANEL DE ADMIN ---
+            const sistemaVigenteToggle = document.getElementById('sistema-vigente-toggle');
+            const fechaVigenciaInput = document.getElementById('fecha-vigencia-input');
+            const userPasswordInput = document.getElementById('user-password-input');
+            const adminPasswordInput = document.getElementById('admin-password-input');
+            const btnGuardarAdmin = document.getElementById('btn-guardar-admin');
+            const btnAdminLogout = document.getElementById('btn-admin-logout');
+            const estadoVigenciaTexto = document.getElementById('estado-vigencia-texto');
+
+            function loadAdminSettings() {
+                const vigente = localStorage.getItem('sistemaVigente') !== 'false'; // Default a true
+                const fechaVigencia = localStorage.getItem('fechaVigencia') || '';
+                const { userPass, adminPass } = getPasswords();
+                
+                sistemaVigenteToggle.checked = vigente;
+                fechaVigenciaInput.value = fechaVigencia;
+                userPasswordInput.value = userPass;
+                adminPasswordInput.value = adminPass;
+                updateEstadoVigenciaTexto(vigente);
+            }
+
+            function updateEstadoVigenciaTexto(isVigente) {
+                if(isVigente) {
+                    estadoVigenciaTexto.textContent = "Vigente";
+                    estadoVigenciaTexto.classList.remove('text-red-400');
+                    estadoVigenciaTexto.classList.add('text-green-400');
+                } else {
+                    estadoVigenciaTexto.textContent = "No Vigente";
+                    estadoVigenciaTexto.classList.add('text-red-400');
+                    estadoVigenciaTexto.classList.remove('text-green-400');
+                }
+            }
+            
+            sistemaVigenteToggle.addEventListener('change', (e) => updateEstadoVigenciaTexto(e.target.checked));
+
+            btnGuardarAdmin.addEventListener('click', () => {
+                const newUserPass = userPasswordInput.value.trim();
+                const newAdminPass = adminPasswordInput.value.trim();
+
+                if (!newUserPass || !newAdminPass) {
+                    showMessage('Las claves no pueden estar vacías.', true);
+                    return;
+                }
+
+                localStorage.setItem('sistemaVigente', sistemaVigenteToggle.checked);
+                localStorage.setItem('fechaVigencia', fechaVigenciaInput.value);
+                localStorage.setItem('userPassword', newUserPass);
+                localStorage.setItem('adminPassword', newAdminPass);
+                showMessage('Configuración guardada correctamente.');
+            });
+            
+            adminPanel.addEventListener('click', (e) => {
+                const toggleButton = e.target.closest('[data-toggle-password]');
+                if (toggleButton) {
+                    const targetInputId = toggleButton.dataset.togglePassword;
+                    const passwordInput = document.getElementById(targetInputId);
+                    if (passwordInput) {
+                        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                        passwordInput.setAttribute('type', type);
+                        const eyeIcon = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>`;
+                        const eyeSlashIcon = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 1.274-4.057 5.064-7 9.542-7 .847 0 1.67.127 2.455.364m0 0a10.052 10.052 0 015.682 6.636M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l22 22"></path></svg>`;
+                        toggleButton.innerHTML = type === 'password' ? eyeIcon : eyeSlashIcon;
+                    }
+                }
+            });
+
+            // --- ESTADO DE LA APLICACIÓN ---
+            let profesionales, proximoIdProfesional, colaParaRegistro, llamadasPublicas, ultimoProfesionalSeleccionado, historialRecepcion, registroDiario;
+            let pantallaInterval;
+            const MAX_LLAMADAS_EN_PANTALLA = 8;
+            const MAX_HISTORIAL_RECEPCION = 20;
+
+            // --- REFERENCIAS AL DOM ---
+            const tabs = document.querySelectorAll('.tab-button');
+            const btnToggleDarkMode = document.getElementById('btn-toggle-dark-mode');
+            const lightIcon = document.getElementById('theme-toggle-light-icon');
+            const darkIcon = document.getElementById('theme-toggle-dark-icon');
+            const btnAppFullscreen = document.getElementById('btn-app-fullscreen');
+            const btnLogout = document.getElementById('btn-logout');
+            const contents = document.querySelectorAll('.tab-content');
+            const inputProfesionalNombre = document.getElementById('input-profesional-nombre');
+            const inputProfesionalEspecialidad = document.getElementById('input-profesional-especialidad');
+            const inputProfesionalConsultorio = document.getElementById('input-profesional-consultorio');
+            const btnAgregarProfesional = document.getElementById('btn-agregar-profesional');
+            const listaProfesionalesDiv = document.getElementById('lista-profesionales');
+            const inputManualTicket = document.getElementById('input-manual-ticket');
+            const btnLlamarManual = document.getElementById('btn-llamar-manual');
+            const numeroLlamadoSpan = document.getElementById('numero-llamado');
+            const inputPacienteNombre = document.getElementById('input-paciente-nombre');
+            const inputPacienteDni = document.getElementById('input-paciente-dni');
+            const inputPacienteObraSocial = document.getElementById('input-paciente-obra-social');
+            const inputPacienteObservaciones = document.getElementById('input-paciente-observaciones');
+            const selectorProfesionalAsignacion = document.getElementById('selector-profesional-asignacion');
+            const btnAsignarPaciente = document.getElementById('btn-asignar-paciente');
+            const listasEsperaRecepcionDiv = document.getElementById('listas-espera-recepcion');
+            const historialLlamadosRecepcionDiv = document.getElementById('historial-llamados-recepcion');
+            const selectorVistaProfesional = document.getElementById('selector-vista-profesional');
+            const vistaProfesionalDetalleDiv = document.getElementById('vista-profesional-detalle');
+            const registrosDiariosContainer = document.getElementById('registros-diarios-container');
+            const tablaLlamadasBody = document.getElementById('tabla-llamadas-body');
+            const btnFullscreenPublic = document.getElementById('btn-fullscreen-public');
+            const editModal = document.getElementById('edit-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalBody = document.getElementById('modal-body');
+            const modalCancel = document.getElementById('modal-cancel');
+            const modalSave = document.getElementById('modal-save');
+            const licenseWarningDiv = document.getElementById('license-warning');
+            const contactModal = document.getElementById('contact-modal');
+            const contactModalClose = document.getElementById('contact-modal-close');
+            let onSaveCallback = null;
+            
+            // --- FUNCIÓN DE NOTIFICACIÓN ---
+            function showMessage(text, isError = false) {
+                const messageBox = document.createElement('div');
+                messageBox.textContent = text;
+                messageBox.className = `custom-message-box fixed bottom-5 right-5 p-4 rounded-lg shadow-lg text-white z-[100] ${isError ? 'bg-red-600' : 'bg-sanitary-600'}`;
+                document.body.appendChild(messageBox);
+                setTimeout(() => {
+                    messageBox.style.opacity = '0';
+                    setTimeout(() => messageBox.remove(), 500);
+                }, 3000);
+            }
+
+            // --- LÓGICA DE MODAL DE CONTACTO Y LICENCIA ---
+            function showContactModal() {
+                contactModal.classList.remove('hidden');
+                contactModal.classList.add('flex');
+            }
+            function hideContactModal() {
+                contactModal.classList.add('hidden');
+                contactModal.classList.remove('flex');
+            }
+            contactModalClose.addEventListener('click', hideContactModal);
+            licenseWarningDiv.addEventListener('click', showContactModal);
+
+            function updateLicenseWarning() {
+                const vigente = localStorage.getItem('sistemaVigente') !== 'false';
+                const fechaVigenciaStr = localStorage.getItem('fechaVigencia');
+                
+                licenseWarningDiv.classList.add('hidden'); 
+
+                if (!vigente || !fechaVigenciaStr) return;
+
+                const hoy = new Date();
+                hoy.setHours(0, 0, 0, 0);
+                
+                const parts = fechaVigenciaStr.split('-');
+                const fechaVigencia = new Date(parts[0], parts[1] - 1, parts[2]);
+
+                const diffTime = fechaVigencia - hoy;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                if (diffDays >= 0 && diffDays <= 10) {
+                    licenseWarningDiv.textContent = `TE QUEDAN ${diffDays} DÍAS DE VIGENCIA. CONTACTA AL ADMINISTRADOR.`;
+                    licenseWarningDiv.classList.remove('hidden');
+                }
+            }
+            
+            // --- CERRAR SESIÓN ---
+            function logout() {
+                appContainer.classList.add('hidden');
+                appContainer.classList.remove('flex');
+                adminPanel.classList.add('hidden');
+                adminPanel.classList.remove('flex');
+                loginScreen.style.display = 'flex';
+                passwordInput.value = '';
+                loginError.textContent = '';
+                systemStatusMessage.textContent = '';
+            }
+            btnLogout.addEventListener('click', logout);
+            btnAdminLogout.addEventListener('click', logout);
+
+
+            // --- LÓGICA DE NAVEGACIÓN POR PESTAÑAS ---
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const tabName = tab.dataset.tab;
+                    tabs.forEach(t => t.classList.remove('tab-active'));
+                    tab.classList.add('tab-active');
+                    contents.forEach(c => c.classList.add('hidden'));
+                    document.getElementById(`content-${tabName}`).classList.remove('hidden');
+
+                    if (tabName === 'pantalla') startPantallaInterval();
+                    else stopPantallaInterval();
+                });
+            });
+            
+            // --- PANTALLA COMPLETA ---
+            btnAppFullscreen.addEventListener('click', () => {
+                const elem = document.documentElement;
+                if (!document.fullscreenElement) {
+                    if (elem.requestFullscreen) {
+                        elem.requestFullscreen().catch(err => {
+                            showMessage('El modo de pantalla completa no está permitido en este entorno.', true);
+                            console.error(`Error al intentar activar el modo de pantalla completa: ${err.message} (${err.name})`);
+                        });
+                    }
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen().catch(err => {
+                             showMessage('Error al salir de pantalla completa.', true);
+                             console.error(`Error al intentar salir del modo de pantalla completa: ${err.message} (${err.name})`);
+                        });
+                    }
+                }
+            });
+
+            btnFullscreenPublic.addEventListener('click', () => {
+                const elem = document.getElementById('content-pantalla');
+                 if (!document.fullscreenElement) {
+                    if (elem.requestFullscreen) {
+                        elem.requestFullscreen().catch(err => {
+                            showMessage('El modo de pantalla completa no está permitido en este entorno.', true);
+                            console.error(`Error al intentar activar el modo de pantalla completa para la vista pública: ${err.message} (${err.name})`);
+                        });
+                    }
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen().catch(err => {
+                            showMessage('Error al salir de pantalla completa.', true);
+                             console.error(`Error al intentar salir del modo de pantalla completa: ${err.message} (${err.name})`);
+                        });
+                    }
+                }
+            });
+
+            // --- MODO OSCURO ---
+            function updateThemeToggle() {
+                if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    document.documentElement.classList.add('dark');
+                    lightIcon.classList.remove('hidden');
+                    darkIcon.classList.add('hidden');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    darkIcon.classList.remove('hidden');
+                    lightIcon.classList.add('hidden');
+                }
+            }
+
+            btnToggleDarkMode.addEventListener('click', () => {
+                document.documentElement.classList.toggle('dark');
+                localStorage.setItem('color-theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+                updateThemeToggle();
+            });
+
+            // --- SONIDO ---
+            const synthRecepcion = new Tone.Synth().toDestination();
+            const synthProfesional = new Tone.Synth({ oscillator: { type: 'triangle' } }).toDestination();
+
+            function playNotificationSound(type = 'recepcion') {
+                if (Tone.context.state !== 'running') Tone.start();
+                const now = Tone.now();
+                if (type === 'profesional') {
+                    synthProfesional.triggerAttackRelease('C6', '8n', now);
+                } else {
+                    synthRecepcion.triggerAttackRelease('C5', '8n', now);
+                    synthRecepcion.triggerAttackRelease('G5', '8n', now + 0.2);
+                }
+            }
+
+            // --- SINCRONIZACIÓN CON LOCALSTORAGE ---
+            function loadData() {
+                profesionales = JSON.parse(localStorage.getItem('profesionales')) || [];
+                proximoIdProfesional = parseInt(localStorage.getItem('proximoIdProfesional')) || 1;
+                colaParaRegistro = JSON.parse(localStorage.getItem('colaParaRegistro')) || [];
+                llamadasPublicas = JSON.parse(localStorage.getItem('llamadasPublicas')) || [];
+                ultimoProfesionalSeleccionado = localStorage.getItem('ultimoProfesionalSeleccionado') || null;
+                historialRecepcion = JSON.parse(localStorage.getItem('historialRecepcion')) || [];
+                registroDiario = JSON.parse(localStorage.getItem('registroDiario')) || [];
+            }
+
+            function saveData() {
+                localStorage.setItem('profesionales', JSON.stringify(profesionales));
+                localStorage.setItem('proximoIdProfesional', proximoIdProfesional);
+                localStorage.setItem('colaParaRegistro', JSON.stringify(colaParaRegistro));
+                localStorage.setItem('llamadasPublicas', JSON.stringify(llamadasPublicas));
+                localStorage.setItem('ultimoProfesionalSeleccionado', ultimoProfesionalSeleccionado);
+                localStorage.setItem('historialRecepcion', JSON.stringify(historialRecepcion));
+                localStorage.setItem('registroDiario', JSON.stringify(registroDiario));
+            }
+            
+            function agregarLlamadaPublica(turno, lugar, ticket) {
+                llamadasPublicas = llamadasPublicas.filter(l => l.ticket !== ticket);
+                const nuevaLlamada = { turno, lugar, timestamp: new Date().getTime(), ticket };
+                llamadasPublicas.unshift(nuevaLlamada);
+                if (llamadasPublicas.length > MAX_LLAMADAS_EN_PANTALLA) llamadasPublicas.pop();
+                saveData();
+            }
+
+            // --- LÓGICA DEL MODAL DE EDICIÓN ---
+            function openModal(title, content, onSave) {
+                modalTitle.textContent = title;
+                modalBody.innerHTML = content;
+                onSaveCallback = onSave;
+                editModal.classList.remove('hidden');
+                editModal.classList.add('flex');
+            }
+
+            function closeModal() {
+                editModal.classList.add('hidden');
+                editModal.classList.remove('flex');
+                onSaveCallback = null;
+            }
+
+            modalCancel.addEventListener('click', closeModal);
+            modalSave.addEventListener('click', () => {
+                if (onSaveCallback) onSaveCallback();
+            });
+
+            // --- RENDERIZADO Y ACTUALIZACIONES DE UI ---
+            function renderizarTodo() {
+                renderizarListaProfesionales();
+                renderizarSelectoresProfesionales();
+                renderizarVistaRecepcion();
+                renderizarVistaProfesional();
+                renderizarRegistrosDiarios();
+                renderizarPantallaPublica();
+                numeroLlamadoSpan.textContent = colaParaRegistro.length > 0 ? colaParaRegistro[0] : '-';
+            }
+            
+            function renderizarVistaRecepcion() {
+                listasEsperaRecepcionDiv.innerHTML = '';
+                if (profesionales.length === 0) {
+                     listasEsperaRecepcionDiv.innerHTML = '<p class="text-gray-500 text-center">No hay profesionales.</p>';
+                } else {
+                    profesionales.forEach(p => {
+                        const div = document.createElement('div');
+                        div.innerHTML = `<h4 class="font-semibold">${p.nombre} (${p.cola.length})</h4>`;
+                        const ul = document.createElement('ul');
+                        ul.className = 'space-y-1 mt-1';
+                        ul.dataset.profesionalId = p.id;
+                        p.cola.forEach((pac, index) => {
+                            const li = document.createElement('li');
+                            li.dataset.pacienteIndex = index;
+                            li.className = 'p-2 bg-gray-200 dark:bg-gray-600 rounded-md flex justify-between items-center';
+                            li.innerHTML = `
+                                <div>
+                                    <span class="drag-handle">☰</span>
+                                    <span>${pac.nombre} (#${pac.ticket})</span>
+                                </div>
+                                <button data-prof-id="${p.id}" data-pac-index="${index}" class="btn-edit-paciente text-blue-500 text-xs">Editar</button>
+                            `;
+                            ul.appendChild(li);
+                        });
+                        div.appendChild(ul);
+                        listasEsperaRecepcionDiv.appendChild(div);
+                        new Sortable(ul, { group: 'pacientes', animation: 150, handle: '.drag-handle', onEnd: handleDragEnd });
+                    });
+                }
+
+                historialLlamadosRecepcionDiv.innerHTML = historialRecepcion.length === 0 
+                    ? '<p class="text-gray-500 text-center p-2">No hay llamados recientes.</p>' 
+                    : historialRecepcion.map(ticket => `
+                        <div class="p-2 bg-gray-100 dark:bg-gray-700 rounded-md flex justify-between items-center">
+                            <span>Ticket #${ticket}</span>
+                            <button data-ticket="${ticket}" class="btn-rellamar-recepcion text-sanitary-600 hover:text-sanitary-800 p-1 rounded-full">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414z" clip-rule="evenodd" /><path d="M12.293 5.293a1 1 0 011.414 0A4.973 4.973 0 0115 10a4.973 4.973 0 01-1.293 3.293 1 1 0 01-1.414-1.414A2.971 2.971 0 0013 10a2.971 2.971 0 00-.707-1.707 1 1 0 010-1.414z" /></svg>
+                            </button>
+                        </div>`).join('');
+            }
+
+            function renderizarListaProfesionales() {
+                listaProfesionalesDiv.innerHTML = profesionales.length === 0 ? '<p class="text-gray-500">No hay profesionales.</p>' : '';
+                profesionales.forEach(p => {
+                    const div = document.createElement('div');
+                    div.className = 'p-3 bg-white dark:bg-gray-800 rounded-md flex justify-between items-center';
+                    div.innerHTML = `
+                        <div>
+                            <p class="font-semibold">${p.nombre}</p>
+                            <p class="text-sm text-gray-500">${p.especialidad} - Consultorio ${p.consultorio}</p>
+                        </div>
+                        <div>
+                            <button data-id="${p.id}" class="btn-edit-profesional text-blue-500 text-xs mr-2">Editar</button>
+                            <button data-id="${p.id}" class="btn-eliminar-profesional text-red-500 hover:text-red-700 text-xs">Eliminar</button>
+                        </div>`;
+                    listaProfesionalesDiv.appendChild(div);
+                });
+            }
+
+            function renderizarSelectoresProfesionales() {
+                selectorProfesionalAsignacion.innerHTML = '';
+                selectorVistaProfesional.innerHTML = '<option value="">Seleccione...</option>';
+                if (profesionales.length === 0) {
+                    selectorProfesionalAsignacion.innerHTML = '<option>No hay profesionales</option>';
+                } else {
+                    profesionales.forEach(p => {
+                        const option = `<option value="${p.id}">${p.nombre} - C${p.consultorio}</option>`;
+                        selectorProfesionalAsignacion.innerHTML += option;
+                        selectorVistaProfesional.innerHTML += option;
+                    });
+                }
+                if (ultimoProfesionalSeleccionado) {
+                    selectorVistaProfesional.value = ultimoProfesionalSeleccionado;
+                }
+            }
+            
+            function renderizarVistaProfesional() {
+                const idSeleccionado = parseInt(selectorVistaProfesional.value);
+                if (!idSeleccionado) {
+                    vistaProfesionalDetalleDiv.innerHTML = '<p class="text-gray-500 text-center">Seleccione un profesional.</p>';
+                    return;
+                }
+                const prof = profesionales.find(p => p.id === idSeleccionado);
+                if (!prof) return;
+
+                let atendiendoHTML = '';
+                if (prof.atendiendo) {
+                    atendiendoHTML = `<div class="mb-4 p-3 bg-blue-100 dark:bg-blue-900/50 rounded-lg text-center">
+                            <p class="text-sm">Atendiendo a:</p>
+                            <div class="flex items-center justify-center gap-2">
+                                 <button data-prof-id="${prof.id}" class="btn-rellamar-paciente text-sanitary-600 p-1 rounded-full">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414z" clip-rule="evenodd" /><path d="M12.293 5.293a1 1 0 011.414 0A4.973 4.973 0 0115 10a4.973 4.973 0 01-1.293 3.293 1 1 0 01-1.414-1.414A2.971 2.971 0 0013 10a2.971 2.971 0 00-.707-1.707 1 1 0 010-1.414z" /></svg>
+                                </button>
+                                <div>
+                                    <p class="font-bold text-lg">${prof.atendiendo.nombre}</p>
+                                    <p class="text-xs">Ticket #${prof.atendiendo.ticket}</p>
+                                </div>
+                            </div>
+                            <div class="mt-2 text-left text-xs border-t pt-2 border-gray-400/50">
+                                <p><strong>DNI:</strong> ${prof.atendiendo.dni || 'N/A'}</p>
+                                <p><strong>Obra Social:</strong> ${prof.atendiendo.obraSocial || 'N/A'}</p>
+                                <p><strong>Obs:</strong> ${prof.atendiendo.observaciones || 'N/A'}</p>
+                            </div>
+                            <div class="mt-4 flex gap-2">
+                               <button class="btn-marcar-atendido w-full bg-green-500 text-white py-1 rounded text-sm">Marcar Atendido</button>
+                               <button class="btn-marcar-no-atendido w-full bg-red-500 text-white py-1 rounded text-sm">No Atendido</button>
+                            </div>
+                        </div>`;
+                }
+
+                let pendientesHTML = prof.cola.length > 0 ? prof.cola.map((pac, index) => `
+                    <li class="p-2 bg-gray-100 dark:bg-gray-600 rounded-md flex justify-between items-center">
+                        <span>${pac.nombre} (#${pac.ticket})</span>
+                    </li>`).join('') : '<p class="text-gray-500">No hay más pacientes.</p>';
+                
+                vistaProfesionalDetalleDiv.innerHTML = `
+                    <h3 class="text-xl font-bold text-center">${prof.nombre}</h3>
+                    <p class="text-sm text-gray-500 text-center mb-4">${prof.especialidad} - C. ${prof.consultorio}</p>
+                    ${atendiendoHTML}
+                    <button data-id="${prof.id}" class="btn-llamar-paciente w-full bg-sanitary-500 hover:bg-sanitary-600 text-white font-bold py-3 rounded-lg">Llamar Siguiente</button>
+                    <div class="border-t my-4"></div>
+                    <h4 class="font-semibold mb-2">Pacientes Pendientes (${prof.cola.length}):</h4>
+                    <ul class="space-y-2 max-h-48 overflow-y-auto">${pendientesHTML}</ul>`;
+            }
+
+            function renderizarPantallaPublica() {
+                tablaLlamadasBody.innerHTML = '';
+                if (llamadasPublicas.length === 0) {
+                     tablaLlamadasBody.innerHTML = `<tr><td colspan="2" class="p-8 text-center text-gray-500">Esperando llamadas...</td></tr>`;
+                } else {
+                    llamadasPublicas.forEach(llamada => {
+                        const tr = document.createElement('tr');
+                        tr.className = "transition-all duration-300";
+                        tr.innerHTML = `<td class="p-4">${llamada.turno}</td><td class="p-4">${llamada.lugar}</td>`;
+                        tablaLlamadasBody.appendChild(tr);
+                    });
+                }
+            }
+            
+            function renderizarRegistrosDiarios() {
+                registrosDiariosContainer.innerHTML = '';
+                const registrosPorProfesional = registroDiario.reduce((acc, reg) => {
+                    if (!acc[reg.profesionalNombre]) acc[reg.profesionalNombre] = [];
+                    acc[reg.profesionalNombre].push(reg);
+                    return acc;
+                }, {});
+
+                if (Object.keys(registrosPorProfesional).length === 0) {
+                    registrosDiariosContainer.innerHTML = '<p class="text-center text-gray-500">No hay registros de atención para hoy.</p>';
+                    return;
+                }
+
+                for (const profNombre in registrosPorProfesional) {
+                    const registros = registrosPorProfesional[profNombre];
+                    const tablaHTML = `
+                        <div class="mb-6">
+                            <h3 class="text-xl font-semibold mb-2">${profNombre}</h3>
+                            <div class="overflow-x-auto rounded-lg border">
+                                <table class="min-w-full">
+                                    <thead class="bg-gray-100 dark:bg-gray-700">
+                                        <tr>
+                                            <th class="p-3 text-left">Fecha/Hora</th>
+                                            <th class="p-3 text-left">DNI</th>
+                                            <th class="p-3 text-left">Paciente</th>
+                                            <th class="p-3 text-left">Observaciones</th>
+                                            <th class="p-3 text-left">Estado</th>
+                                            <th class="p-3 text-left">Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${registros.map((reg, index) => `
+                                            <tr class="border-t dark:border-gray-700">
+                                                <td class="p-3 text-xs">${reg.fechaHora}</td>
+                                                <td class="p-3">${reg.dni}</td>
+                                                <td class="p-3">${reg.nombre}</td>
+                                                <td class="p-3 text-xs">${reg.observaciones}</td>
+                                                <td class="p-3">${reg.estado}</td>
+                                                <td class="p-3">
+                                                    <button data-registro-index="${index}" class="btn-edit-registro text-blue-500 text-xs">Editar</button>
+                                                    ${reg.estado === 'No Atendido' ? `<button data-registro-index="${index}" class="btn-requeue-paciente text-green-500 text-xs ml-2">↑ Reingresar</button>` : ''}
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                    registrosDiariosContainer.innerHTML += tablaHTML;
+                }
+            }
+
+            function startPantallaInterval() {
+                if (pantallaInterval) return;
+                pantallaInterval = setInterval(() => {
+                    const oldTimestamp = llamadasPublicas.length > 0 ? llamadasPublicas[0].timestamp : 0;
+                    loadData();
+                    if (llamadasPublicas.length > 0 && llamadasPublicas[0].timestamp > oldTimestamp) {
+                        playNotificationSound('profesional');
+                    }
+                    renderizarPantallaPublica();
+                }, 2000);
+            }
+
+            function stopPantallaInterval() {
+                clearInterval(pantallaInterval);
+                pantallaInterval = null;
+            }
+
+            // --- LÓGICA DE NEGOCIO (EVENT LISTENERS) ---
+            btnAgregarProfesional.addEventListener('click', () => {
+                const nombre = inputProfesionalNombre.value.trim();
+                const especialidad = inputProfesionalEspecialidad.value.trim();
+                const consultorio = inputProfesionalConsultorio.value.trim();
+                if (!nombre || !especialidad || !consultorio) { showMessage("Complete todos los campos.", true); return; }
+                profesionales.push({ id: proximoIdProfesional++, nombre, especialidad, consultorio, cola: [], atendiendo: null });
+                inputProfesionalNombre.value = ''; inputProfesionalEspecialidad.value = ''; inputProfesionalConsultorio.value = '';
+                saveData(); renderizarTodo();
+            });
+
+            listaProfesionalesDiv.addEventListener('click', (e) => {
+                if (e.target.classList.contains('btn-eliminar-profesional')) {
+                    if (confirm('¿Está seguro?')) {
+                        profesionales = profesionales.filter(p => p.id !== parseInt(e.target.dataset.id));
+                        saveData(); renderizarTodo();
+                    }
+                }
+                if (e.target.classList.contains('btn-edit-profesional')) {
+                    const profId = parseInt(e.target.dataset.id);
+                    const prof = profesionales.find(p => p.id === profId);
+                    const content = `<div class="space-y-2">
+                            <label>Nombre: <input id="edit-prof-nombre" class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 dark:border-gray-600" value="${prof.nombre}"></label>
+                            <label>Especialidad: <input id="edit-prof-esp" class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 dark:border-gray-600" value="${prof.especialidad}"></label>
+                            <label>Consultorio: <input id="edit-prof-cons" type="number" class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 dark:border-gray-600" value="${prof.consultorio}"></label>
+                        </div>`;
+                    openModal('Editar Profesional', content, () => {
+                        prof.nombre = document.getElementById('edit-prof-nombre').value;
+                        prof.especialidad = document.getElementById('edit-prof-esp').value;
+                        prof.consultorio = document.getElementById('edit-prof-cons').value;
+                        saveData(); renderizarTodo(); closeModal();
+                    });
+                }
+            });
+
+            btnLlamarManual.addEventListener('click', () => {
+                const ticketManual = inputManualTicket.value.trim();
+                if (ticketManual) {
+                    if (!colaParaRegistro.includes(ticketManual)) {
+                        colaParaRegistro.push(ticketManual);
+                        if (!historialRecepcion.includes(ticketManual)) {
+                            historialRecepcion.unshift(ticketManual);
+                            if(historialRecepcion.length > MAX_HISTORIAL_RECEPCION) historialRecepcion.pop();
+                        }
+                        agregarLlamadaPublica(`Ticket #${ticketManual}`, 'Recepción', ticketManual);
+                        saveData(); renderizarTodo(); playNotificationSound('recepcion');
+                        inputManualTicket.value = '';
+                    } else { showMessage('Ese ticket ya está en la cola.', true); }
+                } else { showMessage('Número de ticket inválido.', true); }
+            });
+            
+            btnAsignarPaciente.addEventListener('click', () => {
+                if (colaParaRegistro.length === 0) { showMessage('Debe ingresar un ticket en la cola de registro.', true); return; }
+                const idProfesional = parseInt(selectorProfesionalAsignacion.value);
+                const nombrePaciente = inputPacienteNombre.value.trim();
+                const dni = inputPacienteDni.value.trim();
+                const obraSocial = inputPacienteObraSocial.value.trim();
+                const observaciones = inputPacienteObservaciones.value.trim();
+
+                if (!idProfesional) { showMessage('Debe seleccionar un profesional.', true); return; }
+                if (!nombrePaciente) { showMessage('Debe ingresar el nombre del paciente.', true); return; }
+
+                const prof = profesionales.find(p => p.id === idProfesional);
+                const ticket = colaParaRegistro.shift();
+                prof.cola.push({ ticket, nombre: nombrePaciente, dni, obraSocial, observaciones });
+                
+                llamadasPublicas = llamadasPublicas.filter(l => l.ticket !== ticket);
+
+                inputPacienteNombre.value = ''; inputPacienteDni.value = ''; inputPacienteObraSocial.value = ''; inputPacienteObservaciones.value = '';
+                saveData(); renderizarTodo();
+            });
+
+            selectorVistaProfesional.addEventListener('change', (e) => {
+                ultimoProfesionalSeleccionado = e.target.value;
+                saveData();
+                renderizarVistaProfesional();
+            });
+
+            vistaProfesionalDetalleDiv.addEventListener('click', (e) => {
+                const idSeleccionado = parseInt(selectorVistaProfesional.value);
+                if (!idSeleccionado) return;
+                const prof = profesionales.find(p => p.id === idSeleccionado);
+                if (!prof) return;
+
+                if (e.target.closest('.btn-llamar-paciente')) {
+                    if (prof.atendiendo && !prof.atendiendo.atendido) {
+                        prof.cola.unshift(prof.atendiendo);
+                    }
+                    prof.atendiendo = null;
+
+                    if (prof.cola.length > 0) {
+                        const pacienteLlamado = prof.cola.shift();
+                        pacienteLlamado.atendido = false;
+                        prof.atendiendo = pacienteLlamado;
+                        const lugar = `Consultorio ${prof.consultorio} (${prof.nombre})`;
+                        agregarLlamadaPublica(pacienteLlamado.nombre, lugar, pacienteLlamado.ticket);
+                        playNotificationSound('profesional');
+                    } else {
+                        showMessage('No hay más pacientes en espera.');
+                    }
+                    saveData();
+                    renderizarTodo();
+                }
+                if (e.target.classList.contains('btn-marcar-atendido') || e.target.classList.contains('btn-marcar-no-atendido')) {
+                    if (prof.atendiendo) {
+                        const estado = e.target.classList.contains('btn-marcar-atendido') ? 'Atendido' : 'No Atendido';
+                        const pacienteAtendido = prof.atendiendo;
+                        
+                        registroDiario.unshift({
+                            ...pacienteAtendido,
+                            profesionalNombre: prof.nombre,
+                            estado: estado,
+                            fechaHora: new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short', hour12: false })
+                        });
+
+                        if (estado === 'Atendido') {
+                            llamadasPublicas = llamadasPublicas.filter(l => l.ticket !== pacienteAtendido.ticket);
+                        }
+                        
+                        prof.atendiendo = null;
+                        saveData();
+                        renderizarTodo();
+                    }
+                }
+                if (e.target.closest('.btn-rellamar-paciente')) {
+                    if (prof.atendiendo) {
+                        const lugar = `Consultorio ${prof.consultorio} (${prof.nombre})`;
+                        agregarLlamadaPublica(prof.atendiendo.nombre, lugar, prof.atendiendo.ticket);
+                        playNotificationSound('profesional');
+                    }
+                }
+            });
+            
+            listasEsperaRecepcionDiv.addEventListener('click', (e) => {
+                if (e.target.classList.contains('btn-edit-paciente')) {
+                    const profId = parseInt(e.target.dataset.profId);
+                    const pacIndex = parseInt(e.target.dataset.pacIndex);
+                    const prof = profesionales.find(p => p.id === profId);
+                    const pac = prof.cola[pacIndex];
+                    const content = `<div class="space-y-2">
+                        <label>Nombre: <input id="edit-pac-nombre" class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 dark:border-gray-600" value="${pac.nombre}"></label>
+                        <label>DNI: <input id="edit-pac-dni" class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 dark:border-gray-600" value="${pac.dni || ''}"></label>
+                        <label>Obra Social: <input id="edit-pac-os" class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 dark:border-gray-600" value="${pac.obraSocial || ''}"></label>
+                        <label>Observaciones: <textarea id="edit-pac-obs" class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 dark:border-gray-600">${pac.observaciones || ''}</textarea></label>
+                    </div>`;
+                    openModal(`Editar Paciente (Ticket #${pac.ticket})`, content, () => {
+                        pac.nombre = document.getElementById('edit-pac-nombre').value;
+                        pac.dni = document.getElementById('edit-pac-dni').value;
+                        pac.obraSocial = document.getElementById('edit-pac-os').value;
+                        pac.observaciones = document.getElementById('edit-pac-obs').value;
+                        saveData(); renderizarTodo(); closeModal();
+                    });
+                }
+            });
+
+            historialLlamadosRecepcionDiv.addEventListener('click', (e) => {
+                const rellamarBtn = e.target.closest('.btn-rellamar-recepcion');
+                if (rellamarBtn) {
+                    const ticket = rellamarBtn.dataset.ticket;
+                    agregarLlamadaPublica(`Ticket #${ticket}`, 'Recepción', ticket);
+                    playNotificationSound('recepcion');
+                    renderizarPantallaPublica();
+                }
+            });
+
+            registrosDiariosContainer.addEventListener('click', (e) => {
+                if (e.target.classList.contains('btn-edit-registro')) {
+                    const regIndex = parseInt(e.target.dataset.registroIndex);
+                    const registro = registroDiario[regIndex];
+                    const content = `<div class="space-y-2">
+                        <label>Nombre: <input id="edit-reg-nombre" class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 dark:border-gray-600" value="${registro.nombre}"></label>
+                        <label>DNI: <input id="edit-reg-dni" class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 dark:border-gray-600" value="${registro.dni || ''}"></label>
+                        <label>Obra Social: <input id="edit-reg-os" class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 dark:border-gray-600" value="${registro.obraSocial || ''}"></label>
+                        <label>Observaciones: <textarea id="edit-reg-obs" class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 dark:border-gray-600">${registro.observaciones || ''}</textarea></label>
+                    </div>`;
+                    openModal(`Editar Registro`, content, () => {
+                        registro.nombre = document.getElementById('edit-reg-nombre').value;
+                        registro.dni = document.getElementById('edit-reg-dni').value;
+                        registro.obraSocial = document.getElementById('edit-reg-os').value;
+                        registro.observaciones = document.getElementById('edit-reg-obs').value;
+                        saveData(); renderizarTodo(); closeModal();
+                    });
+                }
+                if (e.target.classList.contains('btn-requeue-paciente')) {
+                    const regIndex = parseInt(e.target.dataset.registroIndex);
+                    const registro = registroDiario[regIndex];
+                    const prof = profesionales.find(p => p.nombre === registro.profesionalNombre);
+                    if (prof) {
+                        const { profesionalNombre, estado, fechaHora, ...pacienteData } = registro;
+                        prof.cola.push(pacienteData);
+                        registroDiario.splice(regIndex, 1);
+                        saveData();
+                        renderizarTodo();
+                    }
+                }
+            });
+
+            function handleDragEnd(evt) {
+                const fromProfId = parseInt(evt.from.dataset.profesionalId);
+                const toProfId = parseInt(evt.to.dataset.profesionalId);
+                const fromProf = profesionales.find(p => p.id === fromProfId);
+                const toProf = profesionales.find(p => p.id === toProfId);
+                const [movedItem] = fromProf.cola.splice(evt.oldIndex, 1);
+                toProf.cola.splice(evt.newIndex, 0, movedItem);
+                saveData(); renderizarTodo();
+            }
+
+            window.addEventListener('storage', () => {
+                loadData(); renderizarTodo();
+            });
+
+            // Inicialización
+            loadData();
+            updateThemeToggle();
+            renderizarTodo();
+        });
+    </script>
+</body>
+</html>
