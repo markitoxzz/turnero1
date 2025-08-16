@@ -61,7 +61,7 @@
         <div class="w-full max-w-xs text-center">
             <h1 class="text-3xl font-bold text-white mb-6">Acceso al Sistema</h1>
             <input type="password" id="password-input" class="w-full p-3 text-center rounded-md mb-4" placeholder="Ingrese la clave">
-            <button id="login-button" class="w-full bg-sanitary-500 hover:bg-sanitary-600 text-white font-bold py-3 rounded-lg">Ingresar</button>
+            <button id="login-button" class="w-full bg-sanitary-500 hover:bg-sanitary-600 text-white font-bold py-3 rounded-lg" disabled>Cargando...</button>
             <p id="login-error" class="text-red-500 mt-4 h-4"></p>
             <p id="system-status-message" class="text-yellow-400 mt-2 h-10 text-sm"></p>
         </div>
@@ -72,6 +72,10 @@
         <header id="app-header" class="p-4 bg-sanitary-600 text-white flex justify-between items-center shadow-md">
             <h1 class="text-xl sm:text-3xl font-bold">TURNERO</h1>
             <div class="flex items-center gap-4">
+                <div class="text-right">
+                    <div id="current-time" class="text-2xl font-bold"></div>
+                    <div id="current-date" class="text-sm opacity-80"></div>
+                </div>
                 <div id="license-warning" class="hidden text-red-200 font-bold uppercase text-xs sm:text-sm cursor-pointer animate-pulse"></div>
                 <div class="flex items-center gap-2">
                     <button id="btn-app-fullscreen" class="p-2 rounded-full hover:bg-white/20" title="Pantalla Completa">
@@ -96,6 +100,7 @@
                 <button data-tab="llamar" class="tab-button text-xs sm:text-base py-3 px-3 sm:px-4 border-b-2 rounded-t-lg focus:outline-none">🗣️ Puestos de Atención</button>
                 <button data-tab="registros" class="tab-button text-xs sm:text-base py-3 px-3 sm:px-4 border-b-2 rounded-t-lg focus:outline-none">📊 Registros Diarios</button>
                 <button data-tab="pantalla" class="tab-button text-xs sm:text-base py-3 px-3 sm:px-4 border-b-2 rounded-t-lg focus:outline-none">🖥️ Pantalla Pública</button>
+                <button data-tab="busqueda" class="tab-button text-xs sm:text-base py-3 px-3 sm:px-4 border-b-2 rounded-t-lg focus:outline-none">🔍 Búsqueda</button>
             </nav>
         </div>
 
@@ -128,16 +133,19 @@
                                 <input type="text" id="input-manual-ticket" placeholder="N° de Ticket del Talonario" class="w-full p-2 border rounded-md text-center">
                                 <button id="btn-llamar-manual" class="bg-sanitary-500 text-white px-4 rounded-md">Ingresar</button>
                             </div>
-                            <div class="mt-4 p-4 bg-white dark:bg-gray-800 rounded-lg">
+                            <div class="mt-4 p-4 bg-white dark:bg-gray-800 rounded-lg relative">
                                 <p class="text-gray-500">Atendiendo al ticket:</p>
                                 <p id="numero-llamado" class="text-5xl font-bold text-gray-900 dark:text-gray-100">-</p>
+                                <button id="btn-descartar-ticket" class="hidden absolute top-2 right-2 text-red-500 hover:text-red-700 p-2 rounded-full" title="Descartar Ticket">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                </button>
                             </div>
                         </div>
                          <div class="border-t pt-6 text-center">
                             <h3 class="font-semibold text-xl mb-4">2. Asignar a Profesional</h3>
                             <div class="space-y-3">
+                                <input type="text" id="input-paciente-dni" placeholder="DNI del paciente (presione Enter para buscar)" class="w-full p-3 border rounded-md">
                                 <input type="text" id="input-paciente-nombre" placeholder="Nombre completo del paciente" class="w-full p-3 border rounded-md">
-                                <input type="text" id="input-paciente-dni" placeholder="DNI del paciente" class="w-full p-3 border rounded-md">
                                 <input type="text" id="input-paciente-obra-social" placeholder="Obra Social" class="w-full p-3 border rounded-md">
                                 <textarea id="input-paciente-observaciones" placeholder="Observaciones..." rows="2" class="w-full p-3 border rounded-md"></textarea>
                                 <select id="selector-profesional-asignacion" class="w-full p-3 border rounded-md"></select>
@@ -183,6 +191,18 @@
                         </thead>
                         <tbody id="tabla-llamadas-body" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
                     </table>
+                </div>
+            </div>
+            <div id="content-busqueda" class="tab-content hidden">
+                <h2 class="text-3xl font-bold text-center mb-6 text-sanitary-600 dark:text-sanitary-400">Búsqueda de Atenciones por DNI</h2>
+                <div class="max-w-4xl mx-auto p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                    <div class="flex gap-2 mb-4">
+                        <input type="text" id="search-dni-input" placeholder="Ingrese DNI del paciente" class="w-full p-2 border rounded-md">
+                        <button id="btn-search-dni" class="bg-sanitary-500 text-white px-6 rounded-md">Buscar</button>
+                    </div>
+                    <div id="search-results-container">
+                        <p class="text-center text-gray-500">Ingrese un DNI para ver el historial de atenciones.</p>
+                    </div>
                 </div>
             </div>
         </main>
@@ -293,7 +313,7 @@
                 }
             };
             
-            // --- REFERENCIAS AL DOM (se mantienen igual) ---
+            // --- REFERENCIAS AL DOM ---
             const loginScreen = document.getElementById('login-screen');
             const appContainer = document.getElementById('app-container');
             const adminPanel = document.getElementById('admin-panel');
@@ -344,8 +364,15 @@
             const btnGuardarAdmin = document.getElementById('btn-guardar-admin');
             const btnAdminLogout = document.getElementById('btn-admin-logout');
             const estadoVigenciaTexto = document.getElementById('estado-vigencia-texto');
+            const btnDescartarTicket = document.getElementById('btn-descartar-ticket');
+            const timeDiv = document.getElementById('current-time');
+            const dateDiv = document.getElementById('current-date');
+            const btnSearchDni = document.getElementById('btn-search-dni');
+            const searchDniInput = document.getElementById('search-dni-input');
+            const searchResultsContainer = document.getElementById('search-results-container');
             let onSaveCallback = null;
             let pantallaInterval;
+            let firebaseReady = false;
             const MAX_LLAMADAS_EN_PANTALLA = 8;
             const MAX_HISTORIAL_RECEPCION = 20;
 
@@ -360,21 +387,30 @@
             }
 
             onSnapshot(appStateRef, (doc) => {
+                const isAppVisible = !appContainer.classList.contains('hidden');
+                const oldLlamadasTimestamp = appState.llamadasPublicas[0]?.timestamp || 0;
+
                 if (doc.exists()) {
-                    const oldLlamadasTimestamp = appState.llamadasPublicas[0]?.timestamp || 0;
-                    appState = { ...appState, ...doc.data() }; // Merge, manteniendo defaults si algo falta
-                    const newLlamadasTimestamp = appState.llamadasPublicas[0]?.timestamp || 0;
-                    
-                    if (document.body.contains(appContainer) && !appContainer.classList.contains('hidden')) {
-                         renderizarTodo(); // Solo renderiza si la app principal está visible
-                    }
-                    if(newLlamadasTimestamp > oldLlamadasTimestamp) {
-                        playNotificationSound('profesional');
-                    }
+                    appState = { ...appState, ...doc.data() };
                 } else {
-                    // El documento no existe, lo creamos con el estado inicial
-                    console.log("No such document! Creating initial state.");
+                    console.log("No document found, creating one with initial state.");
                     saveDataToFirebase();
+                    return;
+                }
+
+                if (!firebaseReady) {
+                    firebaseReady = true;
+                    loginButton.textContent = 'Ingresar';
+                    loginButton.disabled = false;
+                }
+                
+                if (isAppVisible) {
+                    renderizarTodo();
+                }
+
+                const newLlamadasTimestamp = appState.llamadasPublicas[0]?.timestamp || 0;
+                if (isAppVisible && newLlamadasTimestamp > oldLlamadasTimestamp) {
+                    playNotificationSound('profesional');
                 }
             });
 
@@ -397,6 +433,11 @@
             }
 
             loginButton.addEventListener('click', () => {
+                if (!firebaseReady) {
+                    showMessage('Conectando a la base de datos, por favor espere...', true);
+                    return;
+                }
+
                 const pass = passwordInput.value;
                 const { userPassword, adminPassword } = appState.config;
                 loginError.textContent = '';
@@ -693,6 +734,20 @@
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414z" clip-rule="evenodd" /><path d="M12.293 5.293a1 1 0 011.414 0A4.973 4.973 0 0115 10a4.973 4.973 0 01-1.293 3.293 1 1 0 01-1.414-1.414A2.971 2.971 0 0013 10a2.971 2.971 0 00-.707-1.707 1 1 0 010-1.414z" /></svg>
                             </button>
                         </div>`).join('');
+
+                const hayTicketEnEspera = appState.colaParaRegistro.length > 0;
+                inputManualTicket.disabled = hayTicketEnEspera;
+                btnLlamarManual.disabled = hayTicketEnEspera;
+                
+                if (hayTicketEnEspera) {
+                    btnLlamarManual.classList.add('bg-gray-400', 'cursor-not-allowed');
+                    btnLlamarManual.classList.remove('bg-sanitary-500', 'hover:bg-sanitary-600');
+                    btnDescartarTicket.classList.remove('hidden');
+                } else {
+                    btnLlamarManual.classList.remove('bg-gray-400', 'cursor-not-allowed');
+                    btnLlamarManual.classList.add('bg-sanitary-500', 'hover:bg-sanitary-600');
+                    btnDescartarTicket.classList.add('hidden');
+                }
             }
 
             function renderizarListaProfesionales() {
@@ -756,6 +811,10 @@
                                 <p><strong>DNI:</strong> ${prof.atendiendo.dni || 'N/A'}</p>
                                 <p><strong>Obra Social:</strong> ${prof.atendiendo.obraSocial || 'N/A'}</p>
                                 <p><strong>Obs:</strong> ${prof.atendiendo.observaciones || 'N/A'}</p>
+                            </div>
+                            <div class="mt-2 text-left">
+                                <label for="input-diagnostico" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Diagnóstico e Indicaciones:</label>
+                                <textarea id="input-diagnostico" rows="3" class="w-full p-2 border rounded-md bg-white dark:bg-gray-800"></textarea>
                             </div>
                             <div class="mt-4 flex gap-2">
                                <button class="btn-marcar-atendido w-full bg-green-500 text-white py-1 rounded text-sm">Marcar Atendido</button>
@@ -848,10 +907,7 @@
 
             function startPantallaInterval() {
                 if (pantallaInterval) return;
-                pantallaInterval = setInterval(() => {
-                    // La lógica de recarga ya no es necesaria, onSnapshot lo hace
-                    // solo mantenemos el intervalo por si acaso, pero podría eliminarse
-                }, 5000);
+                pantallaInterval = setInterval(() => {}, 5000);
             }
 
             function stopPantallaInterval() {
@@ -871,14 +927,19 @@
             });
 
             listaProfesionalesDiv.addEventListener('click', (e) => {
-                if (e.target.classList.contains('btn-eliminar-profesional')) {
+                const deleteButton = e.target.closest('.btn-eliminar-profesional');
+                if (deleteButton) {
                     if (confirm('¿Está seguro?')) {
-                        appState.profesionales = appState.profesionales.filter(p => p.id !== parseInt(e.target.dataset.id));
+                        const idToDelete = parseInt(deleteButton.dataset.id);
+                        appState.profesionales = appState.profesionales.filter(p => p.id !== idToDelete);
                         saveDataToFirebase();
                     }
+                    return;
                 }
-                if (e.target.classList.contains('btn-edit-profesional')) {
-                    const profId = parseInt(e.target.dataset.id);
+
+                const editButton = e.target.closest('.btn-edit-profesional');
+                if (editButton) {
+                    const profId = parseInt(editButton.dataset.id);
                     const prof = appState.profesionales.find(p => p.id === profId);
                     const content = `<div class="space-y-2">
                             <label>Nombre: <input id="edit-prof-nombre" class="w-full p-2 border rounded-md bg-gray-100 dark:bg-gray-700 dark:border-gray-600" value="${prof.nombre}"></label>
@@ -932,6 +993,14 @@
                 saveDataToFirebase();
             });
 
+            btnDescartarTicket.addEventListener('click', () => {
+                if (appState.colaParaRegistro.length > 0) {
+                    const ticketDescartado = appState.colaParaRegistro.shift();
+                    showMessage(`Ticket #${ticketDescartado} descartado.`);
+                    saveDataToFirebase();
+                }
+            });
+
             selectorVistaProfesional.addEventListener('change', (e) => {
                 appState.ultimoProfesionalSeleccionado = e.target.value;
                 saveDataToFirebase();
@@ -966,11 +1035,15 @@
                     if (prof.atendiendo) {
                         const estado = e.target.classList.contains('btn-marcar-atendido') ? 'Atendido' : 'No Atendido';
                         const pacienteAtendido = prof.atendiendo;
+                        const diagnosticoInput = document.getElementById('input-diagnostico');
+                        const diagnostico = diagnosticoInput ? diagnosticoInput.value.trim() : '';
                         
                         appState.registroDiario.unshift({
                             ...pacienteAtendido,
+                            registroId: `reg_${new Date().getTime()}`,
                             profesionalNombre: prof.nombre,
                             estado: estado,
+                            diagnostico: diagnostico,
                             fechaHora: new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short', hour12: false })
                         });
 
@@ -1067,6 +1140,104 @@
                 toProf.cola.splice(evt.newIndex, 0, movedItem);
                 saveDataToFirebase();
             }
+
+            // --- LÓGICA DE FECHA Y HORA ---
+            function updateDateTime() {
+                const now = new Date();
+                const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
+                const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                if(timeDiv) timeDiv.textContent = now.toLocaleTimeString('es-AR', timeOptions);
+                if(dateDiv) dateDiv.textContent = now.toLocaleDateString('es-AR', dateOptions);
+            }
+            setInterval(updateDateTime, 1000);
+            updateDateTime();
+
+            // --- LÓGICA DE BÚSQUEDA ---
+            inputPacienteDni.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    const dni = inputPacienteDni.value.trim();
+                    if (dni) {
+                        const previousRecord = [...appState.registroDiario].reverse().find(rec => rec.dni === dni);
+                        if (previousRecord) {
+                            inputPacienteNombre.value = previousRecord.nombre || '';
+                            inputPacienteObraSocial.value = previousRecord.obraSocial || '';
+                            inputPacienteObservaciones.value = previousRecord.observaciones || '';
+                            showMessage('Datos del paciente precargados.');
+                        } else {
+                            showMessage('No se encontraron registros previos para este DNI.');
+                        }
+                    }
+                }
+            });
+
+            btnSearchDni.addEventListener('click', () => {
+                const dniToSearch = searchDniInput.value.trim();
+                if (!dniToSearch) {
+                    showMessage('Por favor, ingrese un DNI.', true);
+                    return;
+                }
+
+                const results = appState.registroDiario.filter(rec => rec.dni === dniToSearch);
+
+                if (results.length === 0) {
+                    searchResultsContainer.innerHTML = `<p class="text-center text-gray-500">No se encontraron atenciones para el DNI ${dniToSearch}.</p>`;
+                    return;
+                }
+
+                const tableHTML = `
+                    <div class="overflow-x-auto rounded-lg border mt-4">
+                        <table class="min-w-full">
+                            <thead class="bg-gray-100 dark:bg-gray-700">
+                                <tr>
+                                    <th class="p-3 text-left">Fecha/Hora</th>
+                                    <th class="p-3 text-left">Paciente</th>
+                                    <th class="p-3 text-left">Profesional</th>
+                                    <th class="p-3 text-left">Estado</th>
+                                    <th class="p-3 text-left">Observaciones (Recepción)</th>
+                                    <th class="p-3 text-left">Diagnóstico/Indicaciones</th>
+                                    <th class="p-3 text-left">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${results.map(reg => `
+                                    <tr class="border-t dark:border-gray-700">
+                                        <td class="p-3 text-xs">${reg.fechaHora}</td>
+                                        <td class="p-3">${reg.nombre}</td>
+                                        <td class="p-3">${reg.profesionalNombre}</td>
+                                        <td class="p-3">${reg.estado}</td>
+                                        <td class="p-3 text-xs">${reg.observaciones || ''}</td>
+                                        <td class="p-3 text-xs">${reg.diagnostico || ''}</td>
+                                        <td class="p-3">
+                                            <button data-registro-id="${reg.registroId}" class="btn-delete-registro text-red-500 hover:text-red-700 p-1 rounded-full" title="Eliminar Registro">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                searchResultsContainer.innerHTML = tableHTML;
+            });
+
+            searchResultsContainer.addEventListener('click', (e) => {
+                const deleteButton = e.target.closest('.btn-delete-registro');
+                if (deleteButton) {
+                    const registroIdToDelete = deleteButton.dataset.registroId;
+                    if (!registroIdToDelete || registroIdToDelete === 'undefined') {
+                        showMessage('Este registro es antiguo y no se puede eliminar.', true);
+                        return;
+                    }
+                    if (confirm('¿Está seguro de que desea eliminar este registro de atención de forma permanente?')) {
+                        appState.registroDiario = appState.registroDiario.filter(rec => rec.registroId !== registroIdToDelete);
+                        saveDataToFirebase();
+                        showMessage('Registro eliminado.');
+                        // Re-ejecutar la búsqueda para refrescar la vista
+                        btnSearchDni.click();
+                    }
+                }
+            });
 
             // Inicialización
             updateThemeToggle();
